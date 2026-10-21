@@ -28,6 +28,7 @@ import {
 } from "hevy2garmin";
 import type { GarminClient } from "garmin-auth";
 import { getGarminClient } from "./garmin-upload";
+import { deferForHr, hrWaitMinutesFromEnv } from "./hr-wait";
 import { fetchAllWorkouts, type HevyWorkout } from "./hevy-sync";
 import { hrDepsFor, type HrWorkout } from "./hr-store";
 import { postgresSyncStore } from "./sync-store";
@@ -117,11 +118,25 @@ export function listCandidates(sql: Sql, options: SyncOneOptions = {}) {
 export async function syncOneWorkout(sql: Sql, options: SyncOneOptions = {}) {
   const { fetchWorkouts: _f, garminClientFactory: _g, ...engineOptions } = options;
   const saved = await loadSyncSettings(sql);
-  return engineSyncOneWorkout(buildSyncDeps(sql, options), {
+  const deps = buildSyncDeps(sql, options);
+  const resolved = {
     merge: saved.merge,
     hrFusion: saved.hrFusion,
     descriptionEnabled: saved.descriptionEnabled,
     profile: saved.profile,
     ...engineOptions, // an explicit option still wins, which is what tests rely on
+  };
+  // Unattended runs hold a workout back until its heart rate is on Garmin (see lib/hr-wait.ts).
+  const waiting = await deferForHr(deps, {
+    dryRun: resolved.dryRun,
+    respectGrace: resolved.respectGrace,
+    graceMinutes: resolved.graceMinutes,
+    hrFusion: resolved.hrFusion,
+    hrWaitMinutes: (engineOptions as { hrWaitMinutes?: number }).hrWaitMinutes ?? hrWaitMinutesFromEnv(),
+    targetHevyId: resolved.targetHevyId,
+    targetActivityId: resolved.targetActivityId,
+    mergeOnly: resolved.mergeOnly,
   });
+  if (waiting) return waiting;
+  return engineSyncOneWorkout(deps, resolved);
 }
