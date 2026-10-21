@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 /**
  * The timezone, asked for during setup (#639).
@@ -20,6 +21,7 @@ import { withBasePath } from "@/lib/base-path";
  * rule is written to allow.
  */
 export function SetupTimezone({ current }: { current: string | null }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -51,10 +53,10 @@ export function SetupTimezone({ current }: { current: string | null }) {
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
-      setSaved(value || "blank, so times stay in UTC");
+      setSaved(value || t("stz.blank"));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -65,8 +67,7 @@ export function SetupTimezone({ current }: { current: string | null }) {
   return (
     <div>
       <p className="mb-3 text-sm text-text-secondary">
-        Your workouts carry this as their local time. Without it a 6am session can appear at
-        3am once Garmin passes it to Strava. Prefilled from your browser when empty.
+        {t("stz.intro")}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -74,8 +75,8 @@ export function SetupTimezone({ current }: { current: string | null }) {
           id="setup-timezone"
           type="text"
           defaultValue={current ?? ""}
-          placeholder="e.g. Europe/Athens"
-          aria-label="Timezone (IANA)"
+          placeholder={t("stz.placeholder")}
+          aria-label={t("stz.aria")}
           className="min-w-[16rem] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
         />
         <button
@@ -84,13 +85,13 @@ export function SetupTimezone({ current }: { current: string | null }) {
           disabled={busy}
           className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50"
         >
-          {busy ? "Saving…" : "Save"}
+          {busy ? t("stz.saving") : t("stz.save")}
         </button>
       </div>
       {current && !saved && (
-        <p className="mt-2 text-xs text-text-muted">Currently saved as {current}.</p>
+        <p className="mt-2 text-xs text-text-muted">{t("stz.current", { tz: current })}</p>
       )}
-      {saved && <p className="mt-2 text-xs text-success">Saved as {saved}.</p>}
+      {saved && <p className="mt-2 text-xs text-success">{t("stz.saved", { value: saved })}</p>}
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </div>
   );

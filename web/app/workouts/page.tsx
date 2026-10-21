@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { WorkoutList } from "@/components/workout-list";
 import { CandidatesList } from "@/components/candidates-list";
+import { getT } from "@/lib/i18n/server";
 
 // Queries the live hevy2garmin Postgres per request — never at build time.
 export const dynamic = "force-dynamic";
@@ -105,38 +106,37 @@ async function loadWorkouts(): Promise<WorkoutsData> {
 }
 
 export default async function WorkoutsPage() {
+  const { t } = await getT();
   const data = await loadWorkouts();
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 md:px-6">
       <header className="mb-4">
-        <h1 className="text-2xl font-bold text-text">Workouts</h1>
+        <h1 className="text-2xl font-bold text-text">{t("wk.page.title")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Terminal and in-flight workouts recorded in the database.
+          {t("wk.page.subtitle")}
         </p>
       </header>
 
       <div className="mb-6 rounded-lg border border-border bg-surface p-4 text-sm text-text-muted">
-        Sync an unsynced workout from the To sync list, resolve an in-flight one
-        with Mark as synced / Skip / Abandon, and expand a Garmin-matched workout
-        to see its cached heart-rate.
+        {t("wk.page.help")}
       </div>
 
       {data.dbConfigured && <CandidatesList />}
 
       {!data.dbConfigured && (
         <div className="mb-6 rounded-lg border border-warm/40 bg-warm/10 p-4 text-sm text-warm">
-          No database is configured (DATABASE_URL is unset). Showing empty state.
+          {t("wk.noDb")}
         </div>
       )}
 
       {data.items.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-8 text-center">
           <p className="text-sm font-medium text-text-secondary">
-            No workouts recorded yet.
+            {t("wk.page.empty")}
           </p>
           <p className="mt-1 text-xs text-text-muted">
-            Synced and pending workouts will appear here.
+            {t("wk.page.emptyHint")}
           </p>
         </div>
       ) : (

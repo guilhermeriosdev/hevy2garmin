@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 /**
  * Connect-Garmin form for the setup page. Three modes:
@@ -42,6 +43,7 @@ function extractTicket(raw: string): string | null {
 }
 
 export function ConnectGarmin({ connected, directLogin = false }: { connected: boolean; directLogin?: boolean }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,7 +63,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
     setTicketUrl("");
     setSessionId(null);
     setManual(false);
-    setOkMsg("Garmin connected.");
+    setOkMsg(t("cg.connectedMsg"));
     router.refresh();
   }
 
@@ -70,7 +72,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
     setError(null);
     setOkMsg(null);
     if (!email.trim() || !password) {
-      setError("Enter your Garmin email and password.");
+      setError(t("cg.errCreds"));
       return;
     }
     setBusy(true);
@@ -92,7 +94,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
         setError(null);
       } else {
         if (d.status === "rate_limited") void recordCooldown();
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -105,7 +107,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
     e.preventDefault();
     setError(null);
     if (!mfaCode.trim()) {
-      setError("Enter the verification code Garmin sent you.");
+      setError(t("cg.errMfa"));
       return;
     }
     setBusy(true);
@@ -117,7 +119,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
       });
       const d = (await res.json().catch(() => ({}))) as Reply;
       if (d.status === "connected") onSuccess();
-      else setError(d.error ?? `Request failed (${res.status}).`);
+      else setError(d.error ?? t("common.requestFailed", { status: res.status }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -139,7 +141,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
     setError(null);
     const ticket = extractTicket(ticketUrl);
     if (!ticket) {
-      setError("Paste the full URL after signing in (it contains ?ticket=ST-…).");
+      setError(t("cg.errTicket"));
       return;
     }
     setBusy(true);
@@ -158,7 +160,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
         error?: string;
       };
       if (!ex.ok || !tokens.di_token || !tokens.di_refresh_token || !tokens.di_client_id) {
-        setError(tokens.error ?? "That ticket could not be exchanged. Sign in again for a fresh one.");
+        setError(tokens.error ?? t("cg.errExchange"));
         return;
       }
       const res = await fetch(withBasePath("/api/garmin-ticket"), {
@@ -174,7 +176,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (res.ok && d.ok) onSuccess();
-      else setError(d.error ?? `Could not store the session (${res.status}).`);
+      else setError(d.error ?? t("cg.errStore", { status: res.status }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -190,17 +192,17 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
     return (
       <form onSubmit={submitTicket} className="space-y-3">
         <p className="text-xs text-text-muted">
-          Garmin needs you to sign in on its own page. Do these in order:
+          {t("cg.manualIntro")}
         </p>
         <ol className="ml-4 list-decimal space-y-1 text-xs text-text-secondary">
           <li>
             <a href={GARMIN_SSO_URL} target="_blank" rel="noreferrer" className="text-teal underline">
-              Sign in to Garmin
+              {t("cg.manualSignIn")}
             </a>{" "}
-            in the new tab (complete any verification there).
+            {t("cg.manualStep1")}
           </li>
-          <li>When it finishes, copy the full URL from the address bar.</li>
-          <li>Paste it below and press Connect.</li>
+          <li>{t("cg.manualStep2")}</li>
+          <li>{t("cg.manualStep3")}</li>
         </ol>
         <input
           type="text"
@@ -208,7 +210,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
           onChange={(e) => setTicketUrl(e.target.value)}
           placeholder="https://sso.garmin.com/sso/embed?ticket=ST-…"
           className={inputCls}
-          aria-label="Garmin ticket URL"
+          aria-label={t("cg.ticketAria")}
         />
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -216,7 +218,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
             disabled={busy}
             className="rounded-lg bg-teal/20 px-4 py-2 text-sm font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
           >
-            {busy ? "Connecting…" : "Connect"}
+            {busy ? t("cg.connecting") : t("cg.connect")}
           </button>
           <button
             type="button"
@@ -224,7 +226,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
             disabled={busy}
             className="text-xs text-text-muted underline hover:text-text-secondary disabled:opacity-50"
           >
-            Back to password sign-in
+            {t("cg.backToPassword")}
           </button>
           {error && <span className="text-xs text-danger" role="alert">{error}</span>}
         </div>
@@ -237,8 +239,7 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
     return (
       <form onSubmit={submitMfa} className="space-y-3">
         <p className="text-xs text-text-muted">
-          This Garmin account uses two-factor authentication. Enter the
-          verification code from your authenticator app or SMS.
+          {t("cg.mfaIntro")}
         </p>
         <input
           type="text"
@@ -246,16 +247,16 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
           autoComplete="one-time-code"
           value={mfaCode}
           onChange={(e) => setMfaCode(e.target.value)}
-          placeholder="Verification code"
+          placeholder={t("cg.mfaCode")}
           className={inputCls}
-          aria-label="Verification code"
+          aria-label={t("cg.mfaCode")}
         />
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" disabled={busy} className="rounded-lg bg-teal/20 px-4 py-2 text-sm font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50">
-            {busy ? "Verifying…" : "Verify code"}
+            {busy ? t("cg.verifying") : t("cg.verify")}
           </button>
           <button type="button" onClick={() => { setSessionId(null); setMfaCode(""); setError(null); }} disabled={busy} className="text-xs text-text-muted underline hover:text-text-secondary disabled:opacity-50">
-            Start over
+            {t("cg.startOver")}
           </button>
           {error && <span className="text-xs text-danger" role="alert">{error}</span>}
         </div>
@@ -268,23 +269,22 @@ export function ConnectGarmin({ connected, directLogin = false }: { connected: b
     <form onSubmit={startLogin} className="space-y-3">
       <p className="text-xs text-text-muted">
         {connected
-          ? "Garmin is connected. Sign in again to refresh the session."
-          : "Sign in with your Garmin Connect account. Your password is used only to get a token and is never stored."}
+          ? t("cg.introConnected")
+          : t("cg.introNew")}
       </p>
-      <input type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Garmin email" className={inputCls} aria-label="Garmin email" />
-      <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Garmin password" className={inputCls} aria-label="Garmin password" />
+      <input type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("cg.email")} className={inputCls} aria-label={t("cg.email")} />
+      <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("cg.password")} className={inputCls} aria-label={t("cg.password")} />
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={busy} className="rounded-lg bg-teal/20 px-4 py-2 text-sm font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50">
-          {busy ? "Connecting…" : "Connect Garmin"}
+          {busy ? t("cg.connecting") : t("cg.connectGarmin")}
         </button>
         {okMsg && <span className="text-xs text-success">{okMsg}</span>}
         {error && <span className="text-xs text-danger" role="alert">{error}</span>}
       </div>
       <p className="text-xs text-text-muted">
-        Two-factor accounts are supported. Having trouble, or Garmin asking for a
-        captcha?{" "}
+        {t("cg.trouble")}{" "}
         <button type="button" onClick={() => { setManual(true); setError(null); }} className="text-teal underline">
-          Sign in on Garmin&apos;s site instead
+          {t("cg.troubleLink")}
         </button>
         .
       </p>

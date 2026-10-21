@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 import type { UpdateBanner as Banner } from "@/lib/update-check";
 
 /**
@@ -88,6 +89,7 @@ export function UpdateBannerView({
   onUpdate?: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useI18n();
   const n = banner.behindBy ?? 0;
   const offerUpdate = banner.canUpdate && (phase === "idle" || phase === "requesting" || phase === "failed");
   return (
@@ -95,56 +97,55 @@ export function UpdateBannerView({
       <p className="min-w-0 flex-1 basis-full text-sm text-text sm:basis-60">
         {/* Already in sync, "Update available" and See what's new would contradict the line below. */}
         {phase === "up-to-date" ? null : banner.kind === "behind" ? (
-          <>Update available: {n} new {n === 1 ? "change" : "changes"} since your version.</>
+          <>{t(n === 1 ? "upd.behind.one" : "upd.behind.other", { n })}</>
         ) : (
           <>
-            An update is available. Your fork was made before this project&apos;s history was rewritten, so update it on
-            GitHub: <a href={banner.forkUrl} className={link}>open your fork</a> and follow{" "}
-            <a href={banner.docsUrl} className={link}>the update steps</a>.
+            {t("upd.rewritten.pre")} <a href={banner.forkUrl} className={link}>{t("upd.openYourFork")}</a> {t("upd.andFollow")}{" "}
+            <a href={banner.docsUrl} className={link}>{t("upd.updateSteps")}</a>.
           </>
         )}
         {phase === "started" && (
           <span className="mt-1 block text-text-secondary" role="status">
-            Updating… your dashboard will reload with the new version in about a minute.
+            {t("upd.started")}
           </span>
         )}
         {phase === "up-to-date" && (
           <span className="block text-text-secondary" role="status">
-            Your fork is already up to date (a new deployment may still be on its way).
+            {t("upd.upToDate")}
           </span>
         )}
         {phase === "cannot-merge" && (
           <span className="mt-1 block text-warm" role="alert">
-            GitHub can&apos;t update your fork automatically. <a href={banner.forkUrl} className={link}>Open your fork</a>{" "}
-            and follow <a href={banner.docsUrl} className={link}>the update steps</a>.
+            {t("upd.cannotMerge.pre")} <a href={banner.forkUrl} className={link}>{t("upd.openFork")}</a>{" "}
+            {t("upd.andFollow")} <a href={banner.docsUrl} className={link}>{t("upd.updateSteps")}</a>.
           </span>
         )}
         {phase === "token" && (
           <span className="mt-1 block text-warm" role="alert">
-            The saved GitHub token can&apos;t sync your fork. It needs the <code>repo</code> scope, and{" "}
-            <code>workflow</code> when the update changes <code>.github/workflows/</code>. Replace it in{" "}
-            <a href={withBasePath("/settings")} className={link}>Settings</a>.
+            {t("upd.token.pre")} <code>repo</code> {t("upd.token.mid")}{" "}
+            <code>workflow</code> {t("upd.token.post")} <code>.github/workflows/</code>{t("upd.token.replace")}{" "}
+            <a href={withBasePath("/settings")} className={link}>{t("pipe.settings")}</a>.
           </span>
         )}
         {phase === "failed" && (
           <span className="mt-1 block text-warm" role="alert">
-            The update didn&apos;t start. Try again, or use Sync fork on <a href={banner.forkUrl} className={link}>your fork</a>.
+            {t("upd.failed.pre")} <a href={banner.forkUrl} className={link}>{t("upd.yourFork")}</a>.
           </span>
         )}
       </p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {offerUpdate && (
           <button type="button" onClick={onUpdate} disabled={phase === "requesting"} className={button}>
-            {phase === "requesting" ? "Updating…" : "Update now"}
+            {phase === "requesting" ? t("upd.updating") : t("upd.updateNow")}
           </button>
         )}
         {banner.kind === "behind" && banner.compareUrl && phase !== "up-to-date" && (
           <a href={banner.compareUrl} className={`text-xs ${link}`}>
-            See what&apos;s new
+            {t("upd.whatsNew")}
           </a>
         )}
         <button type="button" onClick={onDismiss} className="text-xs font-medium text-text-muted hover:text-text">
-          Dismiss
+          {t("upd.dismiss")}
         </button>
       </div>
     </div>

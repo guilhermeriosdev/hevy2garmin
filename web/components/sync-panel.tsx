@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
+import { tryTranslate, type TFunction } from "@/lib/i18n/translate";
+import type { MessageKey } from "@/lib/i18n/messages/en";
 
 /** Mirrors the SyncOneResult shape returned by /api/sync-one. */
 interface SyncResult {
@@ -25,13 +28,13 @@ interface SyncResult {
   error: string | null;
 }
 
-const DECISION_LABEL: Record<string, string> = {
-  would_upload: "A new Garmin activity would be uploaded",
-  already_synced: "Already synced — skipped",
-  existing_garmin_activity: "Garmin already has this — it will be matched, not re-uploaded",
-  claim_lost: "Another sync is already handling this workout",
-  no_candidates: "Nothing to sync — every workout is already handled",
-  no_start_time: "The next workout has no start time, so it can't be matched safely",
+const DECISION_LABEL: Record<string, MessageKey> = {
+  would_upload: "sync.decision.would_upload",
+  already_synced: "sync.decision.already_synced",
+  existing_garmin_activity: "sync.decision.existing_garmin_activity",
+  claim_lost: "sync.decision.claim_lost",
+  no_candidates: "sync.decision.no_candidates",
+  no_start_time: "sync.decision.no_start_time",
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -43,11 +46,11 @@ const STATUS_STYLE: Record<string, string> = {
   error: "bg-danger/15 text-danger",
 };
 
-function fmtDuration(s: number): string {
+function fmtDuration(t: TFunction, s: number): string {
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} min`;
+  if (m < 60) return t("interval.minutes", { n: m });
   const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m`;
+  return t("sync.durationHM", { h, m: m % 60 });
 }
 
 /**
@@ -64,6 +67,7 @@ function fmtDuration(s: number): string {
  */
 export function SyncPanel({ ready }: { ready: boolean }) {
   const router = useRouter();
+  const { t, locale } = useI18n();
   const [result, setResult] = useState<SyncResult | null>(null);
   const [busy, setBusy] = useState<null | "preview" | "live">(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +84,7 @@ export function SyncPanel({ ready }: { ready: boolean }) {
       });
       const d = (await res.json().catch(() => ({}))) as SyncResult & { error?: string };
       if (!res.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setResult(d);
@@ -97,10 +101,9 @@ export function SyncPanel({ ready }: { ready: boolean }) {
     <section className="mb-8 rounded-xl border border-border bg-surface-elevated p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-text">Run a sync</h2>
+          <h2 className="text-lg font-semibold text-text">{t("sync.title")}</h2>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Preview shows what the next sync would do. Nothing is uploaded until
-            you choose Sync now.
+            {t("sync.desc")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -110,17 +113,17 @@ export function SyncPanel({ ready }: { ready: boolean }) {
             disabled={busy !== null}
             className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50"
           >
-            {busy === "preview" ? "Previewing…" : "Preview"}
+            {busy === "preview" ? t("sync.previewing") : t("sync.preview")}
           </button>
           {!confirmLive ? (
             <button
               type="button"
               onClick={() => setConfirmLive(true)}
               disabled={busy !== null || !ready}
-              title={ready ? undefined : "Connect Hevy and Garmin first"}
+              title={ready ? undefined : t("sync.connectFirst")}
               className="rounded-lg bg-teal/20 px-3 py-1.5 text-sm font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
             >
-              Sync now
+              {t("sync.syncNow")}
             </button>
           ) : (
             <span className="flex items-center gap-2">
@@ -130,7 +133,7 @@ export function SyncPanel({ ready }: { ready: boolean }) {
                 disabled={busy !== null}
                 className="rounded-lg bg-teal/30 px-3 py-1.5 text-sm font-medium text-teal transition-colors hover:bg-teal/40 disabled:opacity-50"
               >
-                {busy === "live" ? "Syncing…" : "Confirm upload"}
+                {busy === "live" ? t("sync.syncing") : t("sync.confirmUpload")}
               </button>
               <button
                 type="button"
@@ -138,7 +141,7 @@ export function SyncPanel({ ready }: { ready: boolean }) {
                 disabled={busy !== null}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </span>
           )}
@@ -147,8 +150,7 @@ export function SyncPanel({ ready }: { ready: boolean }) {
 
       {confirmLive && (
         <p className="mt-3 rounded-lg border border-warm/40 bg-warm/10 p-3 text-xs text-warm">
-          This uploads the next workout to Garmin Connect. It runs the same
-          duplicate-safety checks as the automatic sync, but it is a real upload.
+          {t("sync.liveWarning")}
         </p>
       )}
 
@@ -166,24 +168,23 @@ export function SyncPanel({ ready }: { ready: boolean }) {
                 STATUS_STYLE[result.status] ?? "bg-surface-active text-text-secondary"
               }`}
             >
-              {result.dryRun ? "Preview" : result.status}
+              {result.dryRun ? t("sync.preview") : (tryTranslate(locale, `sync.status.${result.status}`) ?? result.status)}
             </span>
             <span className="text-sm text-text">
-              {DECISION_LABEL[result.dedupDecision] ?? result.dedupDecision}
+              {DECISION_LABEL[result.dedupDecision] ? t(DECISION_LABEL[result.dedupDecision]) : result.dedupDecision}
             </span>
           </div>
 
           {result.workout && (
             <div className="mt-3 text-sm">
               <div className="font-medium text-text">
-                {result.workout.title || "Untitled workout"}
+                {result.workout.title || t("dash.untitled")}
               </div>
               {result.fitStats && (
                 <div className="mt-1 text-xs text-text-muted tabular-nums">
-                  {result.fitStats.exercises} exercises · {result.fitStats.totalSets} sets ·{" "}
-                  {result.fitStats.calories} kcal
-                  {result.fitStats.avgHr != null && <> · {result.fitStats.avgHr} bpm avg</>} ·{" "}
-                  {fmtDuration(result.fitStats.durationS)}
+                  {t("sync.stats", { exercises: result.fitStats.exercises, sets: result.fitStats.totalSets, kcal: result.fitStats.calories })}
+                  {result.fitStats.avgHr != null && <> · {t("dash.bpmAvg", { n: result.fitStats.avgHr })}</>} ·{" "}
+                  {fmtDuration(t, result.fitStats.durationS)}
                 </div>
               )}
             </div>
@@ -191,13 +192,13 @@ export function SyncPanel({ ready }: { ready: boolean }) {
 
           {(result.garminActivityId || result.existingGarminActivityId) && (
             <div className="mt-2 text-xs text-text-muted">
-              Garmin activity {result.garminActivityId ?? result.existingGarminActivityId}
-              {result.syncMethod === "match" && " (matched existing)"}
+              {t("sync.garminActivity", { id: String(result.garminActivityId ?? result.existingGarminActivityId) })}
+              {result.syncMethod === "match" && t("sync.matchedExisting")}
             </div>
           )}
 
           <div className="mt-2 text-xs text-text-muted">
-            {result.remaining} workout{result.remaining === 1 ? "" : "s"} left to consider
+            {t(result.remaining === 1 ? "sync.remaining.one" : "sync.remaining.other", { n: result.remaining })}
           </div>
         </div>
       )}

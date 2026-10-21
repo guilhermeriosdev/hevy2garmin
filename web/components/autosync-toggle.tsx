@@ -3,13 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { fmtInterval } from "@/lib/i18n/format";
+import { useI18n } from "@/components/i18n-provider";
 
 const INTERVALS = [30, 60, 120, 240, 360, 720, 1440];
-function fmtInterval(m: number): string {
-  if (m < 60) return `${m} min`;
-  const h = m / 60;
-  return h === 1 ? "1 hour" : h < 24 ? `${h} hours` : "1 day";
-}
 
 /**
  * A compact on/off switch for scheduled auto-sync, for the dashboard, with an
@@ -18,6 +15,7 @@ function fmtInterval(m: number): string {
  * both editable in Settings too; this is the quick control.
  */
 export function AutoSyncToggle({ enabled, interval = 120 }: { enabled: boolean; interval?: number }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +31,7 @@ export function AutoSyncToggle({ enabled, interval = 120 }: { enabled: boolean; 
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       router.refresh();
@@ -55,7 +53,7 @@ export function AutoSyncToggle({ enabled, interval = 120 }: { enabled: boolean; 
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       router.refresh();
@@ -69,11 +67,11 @@ export function AutoSyncToggle({ enabled, interval = 120 }: { enabled: boolean; 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">
       <div className="flex-1">
-        <div className="text-sm font-medium text-text">Auto-sync</div>
+        <div className="text-sm font-medium text-text">{t("autosync.title")}</div>
         <div className="text-xs text-text-muted">
           {enabled
-            ? `On — new workouts sync every ${fmtInterval(interval)}.`
-            : "Off — sync only when you run it."}
+            ? t("autosync.on", { interval: fmtInterval(t, interval) })
+            : t("autosync.off")}
         </div>
         {error && (
           <div className="mt-1 text-xs text-danger" role="alert">
@@ -86,12 +84,12 @@ export function AutoSyncToggle({ enabled, interval = 120 }: { enabled: boolean; 
           value={interval}
           onChange={(e) => changeInterval(Number.parseInt(e.target.value, 10))}
           disabled={busy}
-          aria-label="Auto-sync interval"
+          aria-label={t("autosync.intervalLabel")}
           className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-text focus:border-teal focus:outline-none disabled:opacity-50"
         >
           {INTERVALS.map((m) => (
             <option key={m} value={m}>
-              {fmtInterval(m)}
+              {fmtInterval(t, m)}
             </option>
           ))}
         </select>

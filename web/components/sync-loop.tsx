@@ -11,6 +11,7 @@ import {
   type SyncOneLike,
 } from "@/lib/sync-loop";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 /**
  * Live "Sync all" for the dashboard — ports the Python syncNow() loop. Clicking
@@ -47,6 +48,7 @@ async function recordRun(state: LoopState): Promise<void> {
 
 export function SyncLoop({ ready }: { ready: boolean }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [state, setState] = useState<LoopState>(initialLoopState);
   const [running, setRunning] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -62,7 +64,7 @@ export function SyncLoop({ ready }: { ready: boolean }) {
       // Cap iterations defensively so a misbehaving server can't spin forever.
       for (let i = 0; i < 500; i++) {
         if (stopRef.current) {
-          cur = { ...cur, done: true, message: `Paused after ${cur.synced + cur.skipped} workout(s).` };
+          cur = { ...cur, done: true, message: t("loop.paused", { n: cur.synced + cur.skipped }) };
           setState(cur);
           break;
         }
@@ -79,7 +81,7 @@ export function SyncLoop({ ready }: { ready: boolean }) {
           httpStatus = res.status;
           result = (await res.json().catch(() => ({}))) as SyncOneLike;
         } catch (err) {
-          cur = { ...cur, done: true, errorKind: "generic", message: err instanceof Error ? err.message : "Network error." };
+          cur = { ...cur, done: true, errorKind: "generic", message: err instanceof Error ? err.message : t("loop.networkError") };
           setState(cur);
           break;
         }
@@ -108,9 +110,9 @@ export function SyncLoop({ ready }: { ready: boolean }) {
     <div className="rounded-xl border border-border bg-surface-elevated p-4">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-text">Sync all</h3>
+          <h3 className="text-sm font-semibold text-text">{t("loop.title")}</h3>
           <p className="mt-0.5 text-xs text-text-muted">
-            Upload every pending Hevy workout to Garmin, one at a time, with live progress.
+            {t("loop.desc")}
           </p>
         </div>
         {running ? (
@@ -119,26 +121,26 @@ export function SyncLoop({ ready }: { ready: boolean }) {
             onClick={() => { stopRef.current = true; }}
             className="rounded-lg border border-warm/50 px-3 py-1.5 text-xs font-medium text-warm transition-colors hover:bg-warm/15"
           >
-            Stop
+            {t("loop.stop")}
           </button>
         ) : !confirming ? (
           <button
             type="button"
             onClick={() => setConfirming(true)}
             disabled={!ready}
-            title={!ready ? "Connect Hevy and Garmin first" : undefined}
+            title={!ready ? t("sync.connectFirst") : undefined}
             className="rounded-lg bg-teal/20 px-4 py-1.5 text-xs font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
           >
-            Sync all now
+            {t("loop.syncAllNow")}
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted">Upload all pending to Garmin?</span>
+            <span className="text-xs text-text-muted">{t("loop.confirm")}</span>
             <button type="button" onClick={runLoop} className="rounded-lg bg-teal px-3 py-1.5 text-xs font-medium text-black">
-              Start
+              {t("loop.start")}
             </button>
             <button type="button" onClick={() => setConfirming(false)} className="text-xs text-text-muted underline">
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         )}
@@ -157,10 +159,10 @@ export function SyncLoop({ ready }: { ready: boolean }) {
             />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums text-text-secondary">
-            <span>On Garmin: <span className="font-semibold text-text">{onGarmin}</span></span>
-            <span>Pending: <span className="font-semibold text-text">{state.remaining}</span></span>
-            <span>Synced: <span className="font-semibold text-success">{state.synced}</span></span>
-            {state.skipped > 0 && <span>Skipped: <span className="font-semibold text-text-muted">{state.skipped}</span></span>}
+            <span>{t("loop.onGarmin")} <span className="font-semibold text-text">{onGarmin}</span></span>
+            <span>{t("loop.pending")} <span className="font-semibold text-text">{state.remaining}</span></span>
+            <span>{t("loop.synced")} <span className="font-semibold text-success">{state.synced}</span></span>
+            {state.skipped > 0 && <span>{t("loop.skipped")} <span className="font-semibold text-text-muted">{state.skipped}</span></span>}
             {running && state.currentTitle && <span className="text-text-muted">· {state.currentTitle}…</span>}
           </div>
           {state.done && state.message && (

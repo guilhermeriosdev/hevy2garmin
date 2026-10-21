@@ -4,18 +4,20 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: "◉" },
-  { href: "/workouts", label: "Workouts", icon: "≡" },
-  { href: "/routines", label: "Routines", icon: "◱" },
-  { href: "/mappings", label: "Mappings", icon: "⇄" },
-  { href: "/history", label: "History", icon: "◷" },
-  { href: "/settings", label: "Settings", icon: "⚙" },
-  { href: "/setup", label: "Setup", icon: "⇆" },
-];
+  { href: "/dashboard", label: "nav.dashboard", icon: "◉" },
+  { href: "/workouts", label: "nav.workouts", icon: "≡" },
+  { href: "/routines", label: "nav.routines", icon: "◱" },
+  { href: "/mappings", label: "nav.mappings", icon: "⇄" },
+  { href: "/history", label: "nav.history", icon: "◷" },
+  { href: "/settings", label: "nav.settings", icon: "⚙" },
+  { href: "/setup", label: "nav.setup", icon: "⇆" },
+] as const;
 
 export function NavBar({ authEnabled = false }: { authEnabled?: boolean }) {
+  const { t } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -55,7 +57,7 @@ export function NavBar({ authEnabled = false }: { authEnabled?: boolean }) {
                   : "text-text-secondary hover:text-text hover:bg-surface-hover"
               }`}
             >
-              {label}
+              {t(label)}
             </Link>
           ))}
           {authEnabled && (
@@ -65,7 +67,7 @@ export function NavBar({ authEnabled = false }: { authEnabled?: boolean }) {
               disabled={loggingOut}
               className="ml-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50"
             >
-              {loggingOut ? "Logging out…" : "Log out"}
+              {loggingOut ? t("nav.loggingOut") : t("nav.logout")}
             </button>
           )}
         </div>
@@ -82,7 +84,7 @@ export function NavBar({ authEnabled = false }: { authEnabled?: boolean }) {
             }`}
           >
             <span className="text-lg">{icon}</span>
-            <span className="text-[10px] font-medium">{label}</span>
+            <span className="text-[10px] font-medium">{t(label)}</span>
           </Link>
         ))}
         {authEnabled && (
@@ -93,7 +95,7 @@ export function NavBar({ authEnabled = false }: { authEnabled?: boolean }) {
             className="flex flex-col items-center gap-0.5 px-2 py-1 min-w-[52px] text-text-muted disabled:opacity-50"
           >
             <span className="text-lg">⏻</span>
-            <span className="text-[10px] font-medium">Log out</span>
+            <span className="text-[10px] font-medium">{t("nav.logout")}</span>
           </button>
         )}
       </nav>

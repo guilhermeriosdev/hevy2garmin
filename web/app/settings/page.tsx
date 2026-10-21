@@ -4,6 +4,11 @@ import { DangerZone } from "@/components/danger-zone";
 import { SessionsCard } from "@/components/sessions-card";
 import { ScanDuplicates } from "@/components/scan-duplicates";
 import { serverSyncSchedule } from "@/lib/server-schedule";
+import { LanguageSelect } from "@/components/language-select";
+import { getT } from "@/lib/i18n/server";
+import { fmtDateTime } from "@/lib/i18n/format";
+import { tryTranslate, type TFunction } from "@/lib/i18n/translate";
+import type { Locale } from "@/lib/i18n/config";
 
 // Queries the live hevy2garmin Postgres per request — never at build time.
 export const dynamic = "force-dynamic";
@@ -81,11 +86,8 @@ async function loadSettings(): Promise<SettingsData> {
   };
 }
 
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
+function fmtDate(locale: Locale, value: string | null): string {
+  return fmtDateTime(locale, value, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -101,15 +103,21 @@ function titleCase(key: string): string {
     .join(" ");
 }
 
-function fmtValue(value: unknown): string {
+// Config keys/fields have a translation under config.* / field.*; anything new falls back to Title Case.
+function label(locale: Locale, prefix: "config" | "field", key: string): string {
+  return tryTranslate(locale, `${prefix}.${key}`) ?? titleCase(key);
+}
+
+function fmtValue(locale: Locale, t: TFunction, value: unknown): string {
   if (value === null || value === undefined) return "—";
-  if (typeof value === "boolean") return value ? "On" : "Off";
+  if (typeof value === "boolean") return value ? t("common.on") : t("common.off");
   if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
   if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "string") return tryTranslate(locale, `value.${value}`) ?? value;
   return String(value);
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, locale }: { status: string; locale: Locale }) {
   const connected = status === "connected" || status === "active";
   return (
     <span
@@ -117,12 +125,13 @@ function StatusPill({ status }: { status: string }) {
         connected ? "bg-success/15 text-success" : "bg-surface-active text-text-muted"
       }`}
     >
-      {status}
+      {tryTranslate(locale, `status.${status}`) ?? status}
     </span>
   );
 }
 
 export default async function SettingsPage() {
+  const { t, locale } = await getT();
   const data = await loadSettings();
   const cfg = (key: string): Record<string, unknown> =>
     data.config.find((c) => c.key === key)?.value ?? {};
@@ -137,40 +146,44 @@ export default async function SettingsPage() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 md:px-6">
       <header className="mb-4">
-        <h1 className="text-2xl font-bold text-text">Settings</h1>
+        <h1 className="text-2xl font-bold text-text">{t("settings.title")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Configuration and connection status.
+          {t("settings.subtitle")}
         </p>
       </header>
 
       <div className="mb-6 rounded-lg border border-border bg-surface p-4 text-sm text-text-muted">
-        Editing platform credentials from the web comes in a later phase; the
-        config below is editable now.
+        {t("settings.credentialsNote")}
       </div>
 
       {!data.dbConfigured && (
         <div className="mb-6 rounded-lg border border-warm/40 bg-warm/10 p-4 text-sm text-warm">
-          No database is configured (DATABASE_URL is unset). Showing empty state.
+          {t("settings.noDb")}
         </div>
       )}
 
+      {/* Language */}
+      <section className="mb-8">
+        <LanguageSelect />
+      </section>
+
       {/* Connections */}
       <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold text-text">Connections</h2>
+        <h2 className="mb-3 text-lg font-semibold text-text">{t("settings.connections")}</h2>
         {data.platforms.length === 0 ? (
           <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
-            No platform connections recorded.
+            {t("settings.noConnections")}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-surface-elevated">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-muted">
-                  <th className="px-4 py-2 font-medium">Platform</th>
-                  <th className="px-4 py-2 font-medium">Auth</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Connected</th>
-                  <th className="px-4 py-2 font-medium">Expires</th>
+                  <th className="px-4 py-2 font-medium">{t("settings.col.platform")}</th>
+                  <th className="px-4 py-2 font-medium">{t("settings.col.auth")}</th>
+                  <th className="px-4 py-2 font-medium">{t("settings.col.status")}</th>
+                  <th className="px-4 py-2 font-medium">{t("settings.col.connected")}</th>
+                  <th className="px-4 py-2 font-medium">{t("settings.col.expires")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -181,13 +194,13 @@ export default async function SettingsPage() {
                       {p.auth_type || "—"}
                     </td>
                     <td className="px-4 py-2">
-                      <StatusPill status={p.status} />
+                      <StatusPill status={p.status} locale={locale} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 tabular-nums text-text-muted">
-                      {fmtDate(p.connected_at)}
+                      {fmtDate(locale, p.connected_at)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 tabular-nums text-text-muted">
-                      {fmtDate(p.expires_at)}
+                      {fmtDate(locale, p.expires_at)}
                     </td>
                   </tr>
                 ))}
@@ -199,7 +212,7 @@ export default async function SettingsPage() {
 
       {/* Editable config */}
       <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold text-text">Configuration</h2>
+        <h2 className="mb-3 text-lg font-semibold text-text">{t("settings.configuration")}</h2>
         <SettingsForm
           githubTokenSet={data.platforms.some((r) => r.platform === "github" && r.status === "active")}
           serverSchedule={serverSyncSchedule()}
@@ -227,10 +240,10 @@ export default async function SettingsPage() {
 
       {/* All stored config (read-only reference) */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-text">Stored config</h2>
+        <h2 className="mb-3 text-lg font-semibold text-text">{t("settings.storedConfig")}</h2>
         {data.config.length === 0 ? (
           <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
-            No configuration stored yet (defaults are in use).
+            {t("settings.noConfig")}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -241,10 +254,10 @@ export default async function SettingsPage() {
               >
                 <div className="mb-2 flex items-baseline justify-between gap-2">
                   <h3 className="text-sm font-semibold text-text">
-                    {titleCase(c.key)}
+                    {label(locale, "config", c.key)}
                   </h3>
                   <span className="text-xs text-text-muted">
-                    {fmtDate(c.updated_at)}
+                    {fmtDate(locale, c.updated_at)}
                   </span>
                 </div>
                 <dl className="space-y-1">
@@ -253,14 +266,14 @@ export default async function SettingsPage() {
                       key={k}
                       className="flex items-baseline justify-between gap-3 text-sm"
                     >
-                      <dt className="text-text-muted">{titleCase(k)}</dt>
+                      <dt className="text-text-muted">{label(locale, "field", k)}</dt>
                       <dd className="text-right font-medium text-text-secondary">
-                        {fmtValue(v)}
+                        {fmtValue(locale, t, v)}
                       </dd>
                     </div>
                   ))}
                   {Object.keys(c.value).length === 0 && (
-                    <p className="text-xs text-text-muted">Empty.</p>
+                    <p className="text-xs text-text-muted">{t("settings.empty")}</p>
                   )}
                 </dl>
               </div>
@@ -271,19 +284,19 @@ export default async function SettingsPage() {
 
       {/* Sessions & security */}
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-text">Sessions &amp; security</h2>
+        <h2 className="mb-3 text-lg font-semibold text-text">{t("settings.sessions")}</h2>
         <SessionsCard />
       </section>
 
       {/* Maintenance */}
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-text">Maintenance</h2>
+        <h2 className="mb-3 text-lg font-semibold text-text">{t("settings.maintenance")}</h2>
         <ScanDuplicates />
       </section>
 
       {/* Danger zone */}
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-danger">Danger zone</h2>
+        <h2 className="mb-3 text-lg font-semibold text-danger">{t("settings.dangerZone")}</h2>
         <DangerZone syncedCount={data.syncedCount} />
       </section>
     </main>

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 /**
  * Sessions & Security card for the settings page. "Sign out everywhere" bumps
@@ -11,6 +12,7 @@ import { withBasePath } from "@/lib/base-path";
  * by an inline confirmation.
  */
 export function SessionsCard() {
+  const { t } = useI18n();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -23,7 +25,7 @@ export function SessionsCard() {
       const res = await fetch(withBasePath("/api/logout-all"), { method: "POST" });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       router.push("/login");
@@ -39,10 +41,9 @@ export function SessionsCard() {
     <div className="rounded-xl border border-border bg-surface-elevated p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-text">Sessions &amp; security</h3>
+          <h3 className="text-sm font-semibold text-text">{t("sessions.title")}</h3>
           <p className="mt-0.5 text-xs text-text-muted">
-            This device is signed in. Sign out everywhere to revoke every device&apos;s
-            session (e.g. after losing a device).
+            {t("sessions.desc")}
           </p>
         </div>
         {!confirming ? (
@@ -51,18 +52,18 @@ export function SessionsCard() {
             onClick={() => setConfirming(true)}
             className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-active"
           >
-            Sign out everywhere
+            {t("sessions.signOutAll")}
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted">Sign out all devices?</span>
+            <span className="text-xs text-text-muted">{t("sessions.confirmQ")}</span>
             <button
               type="button"
               onClick={signOutAll}
               disabled={busy}
               className="rounded-lg bg-danger/15 px-3 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/25 disabled:opacity-50"
             >
-              {busy ? "Signing out…" : "Confirm"}
+              {busy ? t("sessions.signingOut") : t("sessions.confirm")}
             </button>
             <button
               type="button"
@@ -70,7 +71,7 @@ export function SessionsCard() {
               disabled={busy}
               className="text-xs text-text-muted underline"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         )}

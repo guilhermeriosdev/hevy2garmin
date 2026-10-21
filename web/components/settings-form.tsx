@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { fmtInterval } from "@/lib/i18n/format";
+import { useI18n } from "@/components/i18n-provider";
+import type { MessageKey } from "@/lib/i18n/messages/en";
 
 interface Props {
   /** A GitHub token is saved (platform_credentials 'github'); the value itself is never sent to the browser. */
@@ -36,17 +39,11 @@ interface Props {
 }
 
 const INTERVALS = [30, 60, 120, 240, 360, 720, 1440];
-const STRATEGIES: { value: string; label: string }[] = [
-  { value: "replace", label: "Replace — upload a fresh strength activity" },
-  { value: "merge", label: "Merge — fold sets/reps into the watch activity" },
-  { value: "describe", label: "Describe — only set the watch activity's notes" },
+const STRATEGIES: { value: string; label: MessageKey }[] = [
+  { value: "replace", label: "sf.strategy.replace" },
+  { value: "merge", label: "sf.strategy.merge" },
+  { value: "describe", label: "sf.strategy.describe" },
 ];
-
-function fmtInterval(m: number): string {
-  if (m < 60) return `${m} min`;
-  const h = m / 60;
-  return h === 1 ? "1 hour" : h < 24 ? `${h} hours` : "1 day";
-}
 
 const cardCls = "rounded-xl border border-border bg-surface-elevated p-4";
 const labelCls = "mb-1 block text-xs text-text-muted";
@@ -73,6 +70,7 @@ function Toggle({ label, checked, onChange, hint }: { label: string; checked: bo
  * are managed on /setup (connect-hevy / connect-garmin).
  */
 export function SettingsForm(p: Props) {
+  const { t } = useI18n();
   const router = useRouter();
   const [autoSync, setAutoSync] = useState(p.autoSyncEnabled);
   const [githubPat, setGithubPat] = useState("");
@@ -83,12 +81,12 @@ export function SettingsForm(p: Props) {
     try {
       const res = await fetch(withBasePath("/api/pull-garmin-profile"), { method: "POST" });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; profile?: { weight_kg?: number | null; birth_year?: number | null; sex?: string | null; vo2max?: number | null } };
-      if (!res.ok || !j.ok || !j.profile) { setPullMsg(j.error ?? `Request failed (${res.status}).`); return; }
+      if (!res.ok || !j.ok || !j.profile) { setPullMsg(j.error ?? t("common.requestFailed", { status: res.status })); return; }
       if (j.profile.weight_kg != null) setWeight(String(j.profile.weight_kg));
       if (j.profile.birth_year != null) setBirthYear(String(j.profile.birth_year));
       if (j.profile.sex) setSex(j.profile.sex);
       if (j.profile.vo2max != null) setVo2max(String(j.profile.vo2max));
-      setPullMsg("Pulled from Garmin. Values updated below; save to keep them.");
+      setPullMsg(t("sf.pulled"));
     } catch (err) { setPullMsg(err instanceof Error ? err.message : String(err)); }
     finally { setPulling(false); }
   }
@@ -170,7 +168,7 @@ export function SettingsForm(p: Props) {
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? `Request failed (${res.status}).`);
+        setError(data.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setSaved(true);
@@ -185,54 +183,53 @@ export function SettingsForm(p: Props) {
   return (
     <form onSubmit={submit} className="space-y-6">
       {!p.serverSchedule && <div className={cardCls}>
-        <label className={labelCls} htmlFor="github_pat">GitHub token (auto-sync on your fork)</label>
+        <label className={labelCls} htmlFor="github_pat">{t("sf.githubToken")}</label>
         <input id="github_pat" type="password" autoComplete="off" value={githubPat} onChange={(e) => setGithubPat(e.target.value)}
-          placeholder={p.githubTokenSet ? "•••• saved — enter a new one to replace it" : "ghp_… (repo + workflow scope)"} className={controlCls} />
-        <p className="mt-0.5 text-xs text-text-muted">Stored in your database, same row the Python dashboard uses. Needed to enable auto-sync on Vercel.</p>
+          placeholder={p.githubTokenSet ? t("sf.githubSaved") : t("sf.githubPlaceholder")} className={controlCls} />
+        <p className="mt-0.5 text-xs text-text-muted">{t("sf.githubHint")}</p>
       </div>}
       {/* Sync */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {p.serverSchedule ? (
           <div className={cardCls}>
-            <span className="text-sm font-semibold text-text">Auto-sync</span>
+            <span className="text-sm font-semibold text-text">{t("autosync.title")}</span>
             <p className="mt-0.5 text-xs text-text-muted">
-              This server syncs {p.serverSchedule}, and the Hevy webhook syncs each finished workout.
-              The schedule is part of the server&apos;s deployment.
+              {t("sf.serverSync", { schedule: p.serverSchedule })}
             </p>
           </div>
         ) : (
         <div className={cardCls}>
           <label className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-text">Auto-sync</span>
+            <span className="text-sm font-semibold text-text">{t("autosync.title")}</span>
             <input type="checkbox" checked={autoSync} onChange={(e) => setAutoSync(e.target.checked)} className="h-4 w-4 accent-teal" />
           </label>
-          <p className="mb-2 mt-0.5 text-xs text-text-muted">Poll Hevy and push new workouts on a schedule.</p>
-          <label className={labelCls} htmlFor="sf-interval">Interval</label>
+          <p className="mb-2 mt-0.5 text-xs text-text-muted">{t("sf.autoSyncHint")}</p>
+          <label className={labelCls} htmlFor="sf-interval">{t("sf.interval")}</label>
           <select id="sf-interval" value={interval} onChange={(e) => setIntervalMin(Number.parseInt(e.target.value, 10))} disabled={!autoSync} className={`${controlCls} disabled:opacity-50`}>
-            {INTERVALS.map((m) => (<option key={m} value={m}>{fmtInterval(m)}</option>))}
+            {INTERVALS.map((m) => (<option key={m} value={m}>{fmtInterval(t, m)}</option>))}
           </select>
         </div>
         )}
-        <Toggle label="HR fusion" checked={hrFusion} onChange={setHrFusion} hint="Pull heart-rate from a matched Garmin activity into the synced workout." />
+        <Toggle label={t("sf.hrFusion")} checked={hrFusion} onChange={setHrFusion} hint={t("sf.hrFusionHint")} />
       </div>
 
       {/* Profile */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-text">Your profile</h3>
+        <h3 className="mb-2 text-sm font-semibold text-text">{t("sf.profile")}</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className={cardCls}>
-            <label className={labelCls} htmlFor="sf-weight">Body weight (kg)</label>
+            <label className={labelCls} htmlFor="sf-weight">{t("sf.weight")}</label>
             <input id="sf-weight" type="number" min={1} max={499} step={0.1} value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="80" className={controlCls} />
           </div>
           <div className={cardCls}>
-            <label className={labelCls} htmlFor="sf-birthyear">Birth year</label>
+            <label className={labelCls} htmlFor="sf-birthyear">{t("sf.birthYear")}</label>
             <input id="sf-birthyear" type="number" min={1900} max={2025} step={1} value={birthYear} onChange={(e) => setBirthYear(e.target.value)} placeholder="1990" className={controlCls} />
           </div>
           <div className={cardCls}>
-            <label className={labelCls} htmlFor="sf-sex">Sex</label>
+            <label className={labelCls} htmlFor="sf-sex">{t("sf.sex")}</label>
             <select id="sf-sex" value={sex} onChange={(e) => setSex(e.target.value)} className={controlCls}>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
+              <option value="male">{t("sf.male")}</option>
+              <option value="female">{t("sf.female")}</option>
             </select>
           </div>
           <div className={cardCls}>
@@ -240,102 +237,101 @@ export function SettingsForm(p: Props) {
             <input id="sf-vo2max" type="number" min={1} max={99} step={0.1} value={vo2max} onChange={(e) => setVo2max(e.target.value)} placeholder="45" className={controlCls} />
           </div>
           <div className="col-span-full flex items-center gap-3">
-            <button type="button" onClick={pullFromGarmin} disabled={pulling} className="rounded-lg border border-border px-3 py-1.5 text-xs text-text disabled:opacity-50">{pulling ? "Pulling…" : "Pull from Garmin"}</button>
+            <button type="button" onClick={pullFromGarmin} disabled={pulling} className="rounded-lg border border-border px-3 py-1.5 text-xs text-text disabled:opacity-50">{pulling ? t("sf.pulling") : t("sf.pull")}</button>
             {pullMsg && <span className="text-xs text-text-muted">{pullMsg}</span>}
           </div>
         </div>
         <div className={`${cardCls} mt-4`}>
-          <label className={labelCls} htmlFor="sf-timezone">Timezone (IANA)</label>
-          <input id="sf-timezone" type="text" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="e.g. Europe/Athens" className={controlCls} list="sf-tz-list" />
+          <label className={labelCls} htmlFor="sf-timezone">{t("sf.timezone")}</label>
+          <input id="sf-timezone" type="text" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder={t("sf.timezonePlaceholder")} className={controlCls} list="sf-tz-list" />
           <datalist id="sf-tz-list">
             {["UTC", "Europe/Athens", "Europe/London", "America/New_York", "America/Los_Angeles", "Asia/Tokyo", "Australia/Sydney"].map((t) => (
               <option key={t} value={t} />
             ))}
           </datalist>
-          <p className="mt-1.5 text-xs text-text-muted">Stamps local time into the FIT so Strava shows the correct workout time.</p>
+          <p className="mt-1.5 text-xs text-text-muted">{t("sf.timezoneHint")}</p>
         </div>
         <div className={`${cardCls} mt-4`}>
-          <label className={labelCls} htmlFor="sf-start-date">Sync workouts from</label>
+          <label className={labelCls} htmlFor="sf-start-date">{t("sf.syncFrom")}</label>
           <input id="sf-start-date" type="date" value={syncStartDate} onChange={(e) => setSyncStartDate(e.target.value)} className={controlCls} />
           <p className="mt-1.5 text-xs text-text-muted">
-            Workouts finished before this date are never offered for sync. Useful if you logged
-            older sessions in Garmin by hand. Leave it empty to consider your whole Hevy history.
+            {t("sf.syncFromHint")}
           </p>
         </div>
         <button type="button" onClick={() => setShowCalc((v) => !v)} className="mt-2 text-xs text-teal underline">
-          {showCalc ? "Hide" : "How are calories calculated?"}
+          {showCalc ? t("sf.calcHide") : t("sf.calcShow")}
         </button>
         {showCalc && (
           <div className="mt-2 rounded-lg border border-border bg-surface p-3 text-xs text-text-secondary">
-            <p>Calories use the Keytel (2005) heart-rate equation, per minute:</p>
+            <p>{t("sf.calc1")}</p>
             <p className="my-1 font-mono text-[11px] text-text">
-              male: (−55.0969 + 0.6309·HR + 0.1988·wt + 0.2017·age) / 4.184
+              {t("sf.calcMale")} (−55.0969 + 0.6309·HR + 0.1988·wt + 0.2017·age) / 4.184
             </p>
             <p className="font-mono text-[11px] text-text">
-              female: (−20.4022 + 0.4472·HR − 0.1263·wt + 0.074·age) / 4.184
+              {t("sf.calcFemale")} (−20.4022 + 0.4472·HR − 0.1263·wt + 0.074·age) / 4.184
             </p>
-            <p className="mt-1">Weight, birth year, sex and VO₂max above feed this estimate.</p>
+            <p className="mt-1">{t("sf.calc2")}</p>
           </div>
         )}
       </div>
 
       {/* Enhance watch / description */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-text">Watch activities</h3>
+        <h3 className="mb-2 text-sm font-semibold text-text">{t("sf.watch")}</h3>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Toggle label="Enhance watch activities" checked={mergeMode} onChange={setMergeMode} hint="Merge Hevy sets/reps into a same-time Garmin watch activity instead of uploading a separate strength activity." />
-          <Toggle label="Activity description" checked={descEnabled} onChange={setDescEnabled} hint="Write the exercise/sets summary into the Garmin activity's description." />
+          <Toggle label={t("sf.enhance")} checked={mergeMode} onChange={setMergeMode} hint={t("sf.enhanceHint")} />
+          <Toggle label={t("sf.description")} checked={descEnabled} onChange={setDescEnabled} hint={t("sf.descriptionHint")} />
         </div>
         <div className={`${cardCls} mt-4`}>
-          <label className={labelCls} htmlFor="sf-strategy">Merge watch strategy</label>
+          <label className={labelCls} htmlFor="sf-strategy">{t("sf.strategy")}</label>
           <select id="sf-strategy" value={strategy} onChange={(e) => setStrategy(e.target.value)} className={controlCls}>
-            {STRATEGIES.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+            {STRATEGIES.map((s) => (<option key={s.value} value={s.value}>{t(s.label)}</option>))}
           </select>
-          <p className="mt-1.5 text-xs text-text-muted">How a Hevy workout is combined with a same-time watch activity.</p>
+          <p className="mt-1.5 text-xs text-text-muted">{t("sf.strategyHint")}</p>
         </div>
       </div>
 
       {/* Advanced */}
       <div>
         <button type="button" onClick={() => setShowAdvanced((v) => !v)} className="text-sm font-semibold text-text underline">
-          {showAdvanced ? "▾ Advanced" : "▸ Advanced"}
+          {showAdvanced ? t("sf.advancedOpen") : t("sf.advancedClosed")}
         </button>
         {showAdvanced && (
           <div className="mt-3 space-y-4">
             <div>
-              <p className="mb-2 text-xs font-medium text-text-muted">Watch activity matching</p>
+              <p className="mb-2 text-xs font-medium text-text-muted">{t("sf.matching")}</p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className={cardCls}>
-                  <label className={labelCls} htmlFor="sf-overlap">Min overlap %</label>
+                  <label className={labelCls} htmlFor="sf-overlap">{t("sf.minOverlap")}</label>
                   <input id="sf-overlap" type="number" min={50} max={95} step={1} value={overlap} onChange={(e) => setOverlap(e.target.value)} className={controlCls} />
                 </div>
                 <div className={cardCls}>
-                  <label className={labelCls} htmlFor="sf-drift">Max drift (min)</label>
+                  <label className={labelCls} htmlFor="sf-drift">{t("sf.maxDrift")}</label>
                   <input id="sf-drift" type="number" min={5} max={60} step={1} value={drift} onChange={(e) => setDrift(e.target.value)} className={controlCls} />
                 </div>
                 <div className={cardCls}>
-                  <label className={labelCls} htmlFor="sf-extratypes">Extra activity types</label>
+                  <label className={labelCls} htmlFor="sf-extratypes">{t("sf.extraTypes")}</label>
                   <input id="sf-extratypes" type="text" value={extraTypes} onChange={(e) => setExtraTypes(e.target.value)} placeholder="indoor_cardio, yoga" className={controlCls} />
                 </div>
               </div>
             </div>
             <div>
-              <p className="mb-2 text-xs font-medium text-text-muted">FIT file timing (seconds)</p>
+              <p className="mb-2 text-xs font-medium text-text-muted">{t("sf.fitTiming")}</p>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className={cardCls}>
-                  <label className={labelCls} htmlFor="sf-working">Working set</label>
+                  <label className={labelCls} htmlFor="sf-working">{t("sf.workingSet")}</label>
                   <input id="sf-working" type="number" min={1} max={3600} step={1} value={workingSet} onChange={(e) => setWorkingSet(e.target.value)} className={controlCls} />
                 </div>
                 <div className={cardCls}>
-                  <label className={labelCls} htmlFor="sf-warmup">Warmup set</label>
+                  <label className={labelCls} htmlFor="sf-warmup">{t("sf.warmupSet")}</label>
                   <input id="sf-warmup" type="number" min={1} max={3600} step={1} value={warmupSet} onChange={(e) => setWarmupSet(e.target.value)} className={controlCls} />
                 </div>
                 <div className={cardCls}>
-                  <label className={labelCls} htmlFor="sf-restsets">Rest / sets</label>
+                  <label className={labelCls} htmlFor="sf-restsets">{t("sf.restSets")}</label>
                   <input id="sf-restsets" type="number" min={0} max={3600} step={1} value={restSets} onChange={(e) => setRestSets(e.target.value)} className={controlCls} />
                 </div>
                 <div className={cardCls}>
-                  <label className={labelCls} htmlFor="sf-restex">Rest / exercises</label>
+                  <label className={labelCls} htmlFor="sf-restex">{t("sf.restExercises")}</label>
                   <input id="sf-restex" type="number" min={0} max={3600} step={1} value={restEx} onChange={(e) => setRestEx(e.target.value)} className={controlCls} />
                 </div>
               </div>
@@ -346,9 +342,9 @@ export function SettingsForm(p: Props) {
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={busy} className="rounded-lg bg-teal/20 px-4 py-2 text-sm font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50">
-          {busy ? "Saving…" : "Save settings"}
+          {busy ? t("sf.saving") : t("sf.save")}
         </button>
-        {saved && <span className="text-xs text-success">Saved.</span>}
+        {saved && <span className="text-xs text-success">{t("sf.saved")}</span>}
         {error && <span className="text-xs text-danger" role="alert">{error}</span>}
       </div>
     </form>

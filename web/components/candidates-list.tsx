@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
+import { fmtDateTime } from "@/lib/i18n/format";
+import type { Locale } from "@/lib/i18n/config";
 
 interface Candidate {
   hevy_id: string;
@@ -19,25 +22,23 @@ interface SyncResult {
   error: string | null;
 }
 
-const DECISION_LABEL: Record<string, string> = {
-  would_upload: "Would upload a new Garmin activity",
-  existing_garmin_activity: "Garmin already has this — would match, not upload",
-  already_synced: "Already synced",
-  no_start_time: "No start time — can't sync safely",
-  no_candidates: "No longer a candidate",
-};
+const DECISION_LABEL = {
+  would_upload: "wk.cand.would_upload",
+  existing_garmin_activity: "wk.cand.existing_garmin_activity",
+  already_synced: "wk.cand.already_synced",
+  no_start_time: "wk.cand.no_start_time",
+  no_candidates: "wk.cand.no_candidates",
+} as const;
 
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function fmtDate(locale: Locale, value: string | null): string {
+  return fmtDateTime(locale, value, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 const btn =
   "rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50";
 
 function CandidateRow({ c, onSynced }: { c: Candidate; onSynced: (id: string) => void }) {
+  const { t, locale } = useI18n();
   const router = useRouter();
   const [busy, setBusy] = useState<null | "preview" | "live">(null);
   const [result, setResult] = useState<SyncResult | null>(null);
@@ -55,7 +56,7 @@ function CandidateRow({ c, onSynced }: { c: Candidate; onSynced: (id: string) =>
       });
       const d = (await res.json().catch(() => ({}))) as SyncResult & { error?: string };
       if (!res.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setResult(d);
@@ -75,12 +76,12 @@ function CandidateRow({ c, onSynced }: { c: Candidate; onSynced: (id: string) =>
     <li className="px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-text">{c.title || "Untitled workout"}</div>
-          <div className="mt-0.5 text-xs text-text-muted">{fmtDate(c.start_time)}</div>
+          <div className="truncate text-sm font-medium text-text">{c.title || t("wk.untitledWorkout")}</div>
+          <div className="mt-0.5 text-xs text-text-muted">{fmtDate(locale, c.start_time)}</div>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => run(false)} disabled={busy !== null} className={btn}>
-            {busy === "preview" ? "Previewing…" : "Preview"}
+            {busy === "preview" ? t("wk.cand.previewing") : t("wk.cand.preview")}
           </button>
           {!confirm ? (
             <button
@@ -89,7 +90,7 @@ function CandidateRow({ c, onSynced }: { c: Candidate; onSynced: (id: string) =>
               disabled={busy !== null}
               className="rounded-lg bg-teal/20 px-2.5 py-1 text-xs font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
             >
-              Sync
+              {t("wk.cand.sync")}
             </button>
           ) : (
             <span className="flex items-center gap-2">
@@ -99,10 +100,10 @@ function CandidateRow({ c, onSynced }: { c: Candidate; onSynced: (id: string) =>
                 disabled={busy !== null}
                 className="rounded-lg bg-teal/30 px-2.5 py-1 text-xs font-medium text-teal transition-colors hover:bg-teal/40 disabled:opacity-50"
               >
-                {busy === "live" ? "Syncing…" : "Confirm"}
+                {busy === "live" ? t("wk.cand.syncing") : t("wk.cand.confirm")}
               </button>
               <button type="button" onClick={() => setConfirm(false)} disabled={busy !== null} className={btn}>
-                Cancel
+                {t("common.cancel")}
               </button>
             </span>
           )}
@@ -110,8 +111,10 @@ function CandidateRow({ c, onSynced }: { c: Candidate; onSynced: (id: string) =>
       </div>
       {result && !error && (
         <div className="mt-1.5 text-xs text-text-secondary">
-          {result.dryRun ? "Preview: " : ""}
-          {DECISION_LABEL[result.dedupDecision] ?? result.dedupDecision}
+          {result.dryRun ? t("wk.cand.previewPrefix") : ""}
+          {result.dedupDecision in DECISION_LABEL
+            ? t(DECISION_LABEL[result.dedupDecision as keyof typeof DECISION_LABEL])
+            : result.dedupDecision}
           {result.status === "synced" && result.garminActivityId
             ? ` · Garmin ${result.garminActivityId}`
             : ""}
@@ -133,6 +136,7 @@ function CandidateRow({ c, onSynced }: { c: Candidate; onSynced: (id: string) =>
  * unreachable or nothing is pending.
  */
 export function CandidatesList() {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [note, setNote] = useState<string | null>(null);
@@ -164,18 +168,18 @@ export function CandidatesList() {
 
   return (
     <section className="mb-8">
-      <h2 className="mb-3 text-lg font-semibold text-text">To sync</h2>
+      <h2 className="mb-3 text-lg font-semibold text-text">{t("wk.cand.title")}</h2>
       {phase === "loading" ? (
         <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
-          Checking Hevy for unsynced workouts…
+          {t("wk.cand.checking")}
         </div>
       ) : candidates.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
           {demo
-            ? "The demo is not connected to a Hevy account, so there is nothing live to list here. The synced history below is sample data."
+            ? t("wk.cand.demo")
             : note
-              ? `Couldn't load candidates: ${note}`
-              : "Everything from Hevy is already synced."}
+              ? t("wk.cand.loadFailed", { note })
+              : t("wk.cand.allSynced")}
         </div>
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface-elevated">

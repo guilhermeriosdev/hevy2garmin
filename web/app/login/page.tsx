@@ -3,8 +3,10 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 function LoginForm() {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,11 +44,11 @@ function LoginForm() {
       } else {
         // Server message covers both "Incorrect password" and the rate-limit
         // "Too many attempts. Try again in …" cooldown (HTTP 429).
-        setError(data.error ?? "Incorrect password");
+        setError(data.error ?? t("login.incorrect"));
         setLoading(false);
       }
     } catch {
-      setError("Something went wrong. Try again.");
+      setError(t("login.error"));
       setLoading(false);
     }
   }
@@ -54,7 +56,7 @@ function LoginForm() {
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
       <h1 className="mb-1 text-2xl font-bold text-text">hevy2garmin</h1>
-      <p className="mb-6 text-sm text-text-secondary">Enter your dashboard password.</p>
+      <p className="mb-6 text-sm text-text-secondary">{t("login.prompt")}</p>
       <form onSubmit={onSubmit} className="flex flex-col gap-3">
         <input
           type="password"
@@ -62,7 +64,7 @@ function LoginForm() {
           autoFocus
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
+          placeholder={t("login.password")}
           className="rounded-lg border border-border bg-surface px-4 py-3 text-text outline-none focus:border-teal"
         />
         {error && (
@@ -76,7 +78,7 @@ function LoginForm() {
           disabled={loading || password.length === 0}
           className="rounded-lg bg-teal px-4 py-3 font-medium text-black transition-opacity disabled:opacity-50"
         >
-          {loading ? "Signing in…" : "Sign in"}
+          {loading ? t("login.signingIn") : t("login.signIn")}
         </button>
       </form>
     </main>

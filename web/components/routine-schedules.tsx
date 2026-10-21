@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 interface Entry {
   scheduleId: string;
@@ -21,6 +22,7 @@ export function RoutineSchedules({
   hevyRoutineId: string;
   entries: Entry[];
 }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [items, setItems] = useState(entries);
   const [busy, setBusy] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function RoutineSchedules({
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setItems((x) => x.filter((e) => e.scheduleId !== scheduleId));
@@ -64,7 +66,7 @@ export function RoutineSchedules({
             type="button"
             onClick={() => unschedule(e.scheduleId)}
             disabled={busy !== null}
-            title="Unschedule"
+            title={t("routineSchedules.unschedule")}
             className="leading-none text-teal/70 transition-colors hover:text-danger disabled:opacity-50"
           >
             ×

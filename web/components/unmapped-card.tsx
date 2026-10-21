@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 interface CategoryOption {
   id: number;
@@ -21,6 +22,7 @@ interface Unmapped {
  * none. Mirrors the Python unmapped-exercises card.
  */
 export function UnmappedCard({ categories }: { categories: CategoryOption[] }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [phase, setPhase] = useState<"loading" | "ready">("loading");
   const [items, setItems] = useState<Unmapped[]>([]);
@@ -50,10 +52,10 @@ export function UnmappedCard({ categories }: { categories: CategoryOption[] }) {
           <line x1="12" y1="9" x2="12" y2="13" />
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
-        <h2 className="text-sm font-semibold text-warm">{items.length} unmapped exercise{items.length === 1 ? "" : "s"}</h2>
+        <h2 className="text-sm font-semibold text-warm">{t(items.length === 1 ? "unmapped.one" : "unmapped.other", { n: items.length })}</h2>
       </div>
       <p className="mb-3 text-xs text-text-muted">
-        These show as &ldquo;Unknown&rdquo; on Garmin. Pick a category to map them.
+        {t("unmapped.hint")}
       </p>
       <ul className="space-y-2">
         {items.map((it) => (
@@ -73,6 +75,7 @@ function UnmappedRow({
   categories: CategoryOption[];
   onMapped: () => void;
 }) {
+  const { t } = useI18n();
   const [category, setCategory] = useState(categories[0]?.id ?? 0);
   const [sub, setSub] = useState("0");
   const [busy, setBusy] = useState(false);
@@ -90,7 +93,7 @@ function UnmappedRow({
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setDone(true);
@@ -109,12 +112,12 @@ function UnmappedRow({
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-text">{item.name}</div>
-          <div className="text-xs text-text-muted">{item.count}× in recent workouts</div>
+          <div className="text-xs text-text-muted">{t("unmapped.count", { n: item.count })}</div>
         </div>
         <select
           value={category}
           onChange={(e) => setCategory(Number.parseInt(e.target.value, 10))}
-          aria-label={`Category for ${item.name}`}
+          aria-label={t("unmapped.catFor", { name: item.name })}
           className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-text focus:border-teal focus:outline-none"
         >
           {categories.map((c) => (
@@ -128,7 +131,7 @@ function UnmappedRow({
           min={0}
           value={sub}
           onChange={(e) => setSub(e.target.value)}
-          aria-label={`Sub ID for ${item.name}`}
+          aria-label={t("unmapped.subFor", { name: item.name })}
           className="w-16 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-text focus:border-teal focus:outline-none"
         />
         <button
@@ -137,7 +140,7 @@ function UnmappedRow({
           disabled={busy}
           className="rounded-lg bg-teal/20 px-3 py-1.5 text-xs font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
         >
-          {busy ? "…" : "Map"}
+          {busy ? "…" : t("unmapped.map")}
         </button>
       </div>
       {error && (

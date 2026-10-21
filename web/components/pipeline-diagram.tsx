@@ -11,6 +11,8 @@
  *   matched to the workout, its calories computed, and fed back into the FIT.
  */
 import { withBasePath } from "@/lib/base-path";
+import { getT } from "@/lib/i18n/server";
+import type { TFunction } from "@/lib/i18n/translate";
 
 interface Stage {
   key: string;
@@ -23,15 +25,17 @@ interface Stage {
   titleVar: string; // fill for the title text
 }
 
-const STAGES: Stage[] = [
-  { key: "hevy", x: 8, w: 188, title: "Hevy", sub: "Fetch your workout", cls: "pl-teal", titleVar: "var(--color-teal-light)" },
-  { key: "map", x: 224, w: 188, title: "Map exercises", sub: "", dynamic: true, cls: "pl-warm", titleVar: "var(--color-warm-light)" },
-  { key: "fit", x: 440, w: 188, title: "Generate FIT", sub: "sets · reps · HR · calories", cls: "pl-success", titleVar: "var(--color-success)" },
-  { key: "garmin", x: 656, w: 188, title: "Garmin", sub: "Upload activity", cls: "pl-tealL", titleVar: "var(--color-teal-light)" },
+const buildStages = (t: TFunction): Stage[] => [
+  { key: "hevy", x: 8, w: 188, title: "Hevy", sub: t("pipe.fetch"), cls: "pl-teal", titleVar: "var(--color-teal-light)" },
+  { key: "map", x: 224, w: 188, title: t("pipe.map"), sub: "", dynamic: true, cls: "pl-warm", titleVar: "var(--color-warm-light)" },
+  { key: "fit", x: 440, w: 188, title: t("pipe.generate"), sub: t("pipe.generateSub"), cls: "pl-success", titleVar: "var(--color-success)" },
+  { key: "garmin", x: 656, w: 188, title: "Garmin", sub: t("pipe.upload"), cls: "pl-tealL", titleVar: "var(--color-teal-light)" },
 ];
 
-export function PipelineDiagram({ mappingCount }: { mappingCount?: number }) {
-  const mapSub = `${(mappingCount ?? 433).toLocaleString()} mappings`;
+export async function PipelineDiagram({ mappingCount }: { mappingCount?: number }) {
+  const { t, locale } = await getT();
+  const mapSub = t("pipe.mappings", { n: (mappingCount ?? 433).toLocaleString(locale) });
+  const STAGES = buildStages(t);
 
   return (
     <section className="mb-8 rounded-xl border border-border bg-surface-elevated p-4">
@@ -39,15 +43,15 @@ export function PipelineDiagram({ mappingCount }: { mappingCount?: number }) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-muted" aria-hidden="true">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
-        <h3 className="text-sm font-semibold text-text">Pipeline</h3>
-        <span className="text-xs text-text-muted">— how a workout reaches Garmin</span>
+        <h3 className="text-sm font-semibold text-text">{t("pipe.title")}</h3>
+        <span className="text-xs text-text-muted">{t("pipe.subtitle")}</span>
       </div>
 
       <div className="overflow-x-auto">
         <svg
           viewBox="0 0 852 352"
           role="img"
-          aria-label="Hevy fetches the workout, exercises are mapped to Garmin FIT categories, a FIT file is generated with heart-rate and calories, and it is uploaded to Garmin. In a loop, Garmin's daily heart-rate is matched to the workout and its calories are computed, feeding back into the FIT."
+          aria-label={t("pipe.aria")}
           className="block h-auto w-full min-w-[600px]"
           style={{ fontFamily: "inherit" }}
         >
@@ -129,8 +133,8 @@ export function PipelineDiagram({ mappingCount }: { mappingCount?: number }) {
           {/* Fetch HR data (teal-light, dashed, under Garmin) */}
           <g className="pl-tealL">
             <rect x="656" y="262" width="188" height="76" rx="16" className="pl-base" stroke="currentColor" strokeOpacity="0.4" strokeDasharray="7 4" />
-            <text x="750" y="296" textAnchor="middle" fontSize="14.5" fontWeight="600" fill="var(--color-teal-light)">Fetch HR data</text>
-            <text x="750" y="316" textAnchor="middle" fontSize="11" className="pl-sub">Daily watch monitoring</text>
+            <text x="750" y="296" textAnchor="middle" fontSize="14.5" fontWeight="600" fill="var(--color-teal-light)">{t("pipe.fetchHr")}</text>
+            <text x="750" y="316" textAnchor="middle" fontSize="11" className="pl-sub">{t("pipe.fetchHrSub")}</text>
           </g>
 
           {/* Match HR & calories (danger, under Generate FIT) */}
@@ -138,8 +142,8 @@ export function PipelineDiagram({ mappingCount }: { mappingCount?: number }) {
             <rect x="440" y="262" width="188" height="76" rx="16" fill="currentColor" opacity="0.11" filter="url(#pl-soft)" />
             <rect x="440" y="262" width="188" height="76" rx="16" className="pl-base" stroke="currentColor" strokeOpacity="0.5" />
             <rect x="440" y="262" width="188" height="76" rx="16" fill="currentColor" opacity="0.06" />
-            <text x="534" y="296" textAnchor="middle" fontSize="14" fontWeight="600" fill="var(--color-danger)">Match HR &amp; calories</text>
-            <text x="534" y="316" textAnchor="middle" fontSize="10.5" className="pl-sub">~90 bpm fallback</text>
+            <text x="534" y="296" textAnchor="middle" fontSize="14" fontWeight="600" fill="var(--color-danger)">{t("pipe.match")}</text>
+            <text x="534" y="316" textAnchor="middle" fontSize="10.5" className="pl-sub">{t("pipe.matchSub")}</text>
           </g>
         </svg>
       </div>
@@ -147,15 +151,15 @@ export function PipelineDiagram({ mappingCount }: { mappingCount?: number }) {
       {/* legend */}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-muted">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-teal" style={{ boxShadow: "0 0 10px var(--color-teal)" }} /> Workout data
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-teal" style={{ boxShadow: "0 0 10px var(--color-teal)" }} /> {t("pipe.legendWorkout")}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-danger" style={{ boxShadow: "0 0 10px var(--color-danger)" }} /> Heart-rate enrichment
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-danger" style={{ boxShadow: "0 0 10px var(--color-danger)" }} /> {t("pipe.legendHr")}
         </span>
         <span>
-          Runs when HR fusion is on — toggle it in{" "}
+          {t("pipe.runsWhen")}{" "}
           <a href={withBasePath("/settings")} className="text-teal underline">
-            Settings
+            {t("pipe.settings")}
           </a>
           .
         </span>

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 interface CategoryOption {
   id: number;
@@ -56,6 +57,7 @@ function MappingFields({
   initialCategory: number;
   initialSubcategory: string;
 }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [hevyName, setHevyName] = useState(editName ?? "");
   const [category, setCategory] = useState(initialCategory);
@@ -68,7 +70,7 @@ function MappingFields({
     setError(null);
     const name = hevyName.trim();
     if (!name) {
-      setError("Enter the exact Hevy exercise name.");
+      setError(t("mform.errName"));
       return;
     }
     setBusy(true);
@@ -87,7 +89,7 @@ function MappingFields({
         error?: string;
       };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? `Request failed (${res.status}).`);
+        setError(data.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setHevyName("");
@@ -105,33 +107,33 @@ function MappingFields({
     <>
       {editName && (
         <div className="mb-2 flex items-center gap-2 text-xs text-teal">
-          <span>Overriding <span className="font-medium">{editName}</span></span>
+          <span>{t("mform.overriding")} <span className="font-medium">{editName}</span></span>
           <button
             type="button"
             onClick={() => { setHevyName(""); setSubcategory("0"); setCategory(categories[0]?.id ?? 0); router.replace("/mappings"); }}
             className="underline hover:text-teal/80"
           >
-            Clear
+            {t("mform.clear")}
           </button>
         </div>
       )}
       <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
       <div className="flex-1">
         <label className="mb-1 block text-xs text-text-muted" htmlFor="mf-name">
-          Hevy exercise name (exact)
+          {t("mform.nameLabel")}
         </label>
         <input
           id="mf-name"
           type="text"
           value={hevyName}
           onChange={(e) => setHevyName(e.target.value)}
-          placeholder="e.g. Cable Lateral Raise"
+          placeholder={t("mform.namePlaceholder")}
           className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-teal focus:outline-none"
         />
       </div>
       <div>
         <label className="mb-1 block text-xs text-text-muted" htmlFor="mf-cat">
-          Garmin category
+          {t("mform.catLabel")}
         </label>
         <select
           id="mf-cat"
@@ -148,7 +150,7 @@ function MappingFields({
       </div>
       <div>
         <label className="mb-1 block text-xs text-text-muted" htmlFor="mf-sub">
-          Sub ID
+          {t("mform.subLabel")}
         </label>
         <input
           id="mf-sub"
@@ -164,7 +166,7 @@ function MappingFields({
         disabled={busy}
         className="rounded-lg bg-teal/20 px-4 py-2 text-sm font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
       >
-        {busy ? "Saving…" : "Save"}
+        {busy ? t("mform.saving") : t("mform.save")}
       </button>
         {error && (
           <p className="text-xs text-danger sm:self-center" role="alert">
@@ -181,11 +183,12 @@ function MappingFields({
  * refreshes the list.
  */
 export function DeleteMappingButton({ hevyName }: { hevyName: string }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function remove() {
-    if (!confirm(`Delete custom mapping for "${hevyName}"?`)) return;
+    if (!confirm(t("mform.confirmDelete", { name: hevyName }))) return;
     setBusy(true);
     try {
       await fetch(withBasePath("/api/mapping/delete"), {
@@ -206,7 +209,7 @@ export function DeleteMappingButton({ hevyName }: { hevyName: string }) {
       disabled={busy}
       className="rounded-lg border border-danger/30 px-3 py-1 text-xs font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
     >
-      {busy ? "…" : "Delete"}
+      {busy ? "…" : t("mform.delete")}
     </button>
   );
 }

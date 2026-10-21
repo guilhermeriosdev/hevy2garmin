@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 interface BatchResult {
   dryRun: boolean;
@@ -27,6 +28,7 @@ interface BatchResult {
  * inline confirmation, and the server independently requires authorization.
  */
 export function BatchSync({ ready, onServer = false }: { ready: boolean; onServer?: boolean }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [result, setResult] = useState<BatchResult | null>(null);
   const [busy, setBusy] = useState<null | "preview" | "live">(null);
@@ -44,7 +46,7 @@ export function BatchSync({ ready, onServer = false }: { ready: boolean; onServe
       });
       const d = (await res.json().catch(() => ({}))) as BatchResult;
       if (!res.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setResult(d);
@@ -61,10 +63,9 @@ export function BatchSync({ ready, onServer = false }: { ready: boolean; onServe
     <section className="mb-8 rounded-xl border border-border bg-surface-elevated p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-text">Sync everything</h2>
+          <h2 className="text-lg font-semibold text-text">{t("batch.title")}</h2>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Preview all counts what would sync. Sync all uploads every pending
-            workout{onServer ? " now, on this server" : " (via the scheduled job when deployed)"}.
+            {t("batch.desc", { where: onServer ? t("batch.whereServer") : t("batch.whereDeployed") })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -74,17 +75,17 @@ export function BatchSync({ ready, onServer = false }: { ready: boolean; onServe
             disabled={busy !== null}
             className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50"
           >
-            {busy === "preview" ? "Checking…" : "Preview all"}
+            {busy === "preview" ? t("batch.checking") : t("batch.previewAll")}
           </button>
           {!confirm ? (
             <button
               type="button"
               onClick={() => setConfirm(true)}
               disabled={busy !== null || !ready}
-              title={ready ? undefined : "Connect Hevy and Garmin first"}
+              title={ready ? undefined : t("batch.connectFirst")}
               className="rounded-lg bg-teal/20 px-3 py-1.5 text-sm font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
             >
-              Sync all
+              {t("batch.syncAll")}
             </button>
           ) : (
             <span className="flex items-center gap-2">
@@ -94,7 +95,7 @@ export function BatchSync({ ready, onServer = false }: { ready: boolean; onServe
                 disabled={busy !== null}
                 className="rounded-lg bg-teal/30 px-3 py-1.5 text-sm font-medium text-teal transition-colors hover:bg-teal/40 disabled:opacity-50"
               >
-                {busy === "live" ? "Starting…" : "Confirm sync all"}
+                {busy === "live" ? t("batch.starting") : t("batch.confirm")}
               </button>
               <button
                 type="button"
@@ -102,7 +103,7 @@ export function BatchSync({ ready, onServer = false }: { ready: boolean; onServe
                 disabled={busy !== null}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </span>
           )}
@@ -111,8 +112,7 @@ export function BatchSync({ ready, onServer = false }: { ready: boolean; onServe
 
       {confirm && (
         <p className="mt-3 rounded-lg border border-warm/40 bg-warm/10 p-3 text-xs text-warm">
-          This syncs every pending workout to Garmin Connect. Each upload runs the
-          same duplicate-safety checks as the automatic sync.
+          {t("batch.warn")}
         </p>
       )}
 
@@ -127,20 +127,23 @@ export function BatchSync({ ready, onServer = false }: { ready: boolean; onServe
           {result.mode === "preview" && (
             <span className="text-text">
               {result.candidates === 0
-                ? "Nothing to sync — every workout is already handled."
-                : `${result.candidates} workout${result.candidates === 1 ? "" : "s"} would sync.`}
+                ? t("batch.nothing")
+                : t(result.candidates === 1 ? "batch.wouldSync.one" : "batch.wouldSync.other", { n: result.candidates ?? 0 })}
             </span>
           )}
           {result.mode === "dispatch" && (
             <span className="text-success">
-              Sync triggered. Workouts will appear in a few minutes.
+              {t("batch.triggered")}
             </span>
           )}
           {result.mode === "inline" && (
             <span className="text-text tabular-nums">
-              Synced {result.totalSynced ?? 0}, skipped {result.totalSkipped ?? 0}
-              {result.totalDeferred ? `, deferred ${result.totalDeferred}` : ""}
-              {result.totalError ? `, ${result.totalError} error(s)` : ""}.
+              {t("batch.inline", {
+                synced: result.totalSynced ?? 0,
+                skipped: result.totalSkipped ?? 0,
+                deferred: result.totalDeferred ? t("batch.deferred", { n: result.totalDeferred }) : "",
+                errors: result.totalError ? t("batch.errors", { n: result.totalError }) : "",
+              })}
             </span>
           )}
         </div>

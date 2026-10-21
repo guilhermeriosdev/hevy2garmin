@@ -2,6 +2,10 @@ import { getDb } from "@/lib/db";
 import { HevyRoutinesList } from "@/components/hevy-routines-list";
 import { RoutineSchedules } from "@/components/routine-schedules";
 import { RoutineRemove } from "@/components/routine-remove";
+import { getT } from "@/lib/i18n/server";
+import { fmtDateTime } from "@/lib/i18n/format";
+import type { Locale } from "@/lib/i18n/config";
+import type { TFunction } from "@/lib/i18n/translate";
 
 // Queries the live hevy2garmin Postgres per request — never at build time.
 export const dynamic = "force-dynamic";
@@ -88,11 +92,8 @@ async function loadRoutines(): Promise<RoutinesData> {
   };
 }
 
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
+function fmtDate(locale: Locale, value: string | null): string {
+  return fmtDateTime(locale, value, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -102,11 +103,11 @@ function fmtDate(value: string | null): string {
 }
 
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, t }: { status: string; t: TFunction }) {
   const map: Record<string, { cls: string; label: string }> = {
-    success: { cls: "bg-success/15 text-success", label: "Synced" },
-    failed: { cls: "bg-danger/15 text-danger", label: "Failed" },
-    skipped: { cls: "bg-surface-active text-text-muted", label: "Skipped" },
+    success: { cls: "bg-success/15 text-success", label: t("wk.statusSynced") },
+    failed: { cls: "bg-danger/15 text-danger", label: t("wk.statusFailed") },
+    skipped: { cls: "bg-surface-active text-text-muted", label: t("wk.statusSkipped") },
   };
   const s = map[status] ?? { cls: "bg-surface-active text-text-secondary", label: status };
   return (
@@ -126,20 +127,20 @@ function StatCard({ label, value }: { label: string; value: number }) {
 }
 
 export default async function RoutinesPage() {
+  const { t, locale } = await getT();
   const data = await loadRoutines();
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 md:px-6">
       <header className="mb-4">
-        <h1 className="text-2xl font-bold text-text">Routines</h1>
+        <h1 className="text-2xl font-bold text-text">{t("wk.rt.title")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Hevy routines synced to Garmin as planned workouts.
+          {t("wk.rt.subtitle")}
         </p>
       </header>
 
       <div className="mb-6 rounded-lg border border-border bg-surface p-4 text-sm text-text-muted">
-        Sync a Hevy routine to Garmin as a planned workout and add it to a
-        calendar date. Synced routines are listed below.
+        {t("wk.rt.help")}
       </div>
 
       {data.dbConfigured && (
@@ -150,23 +151,22 @@ export default async function RoutinesPage() {
 
       {!data.dbConfigured && (
         <div className="mb-6 rounded-lg border border-warm/40 bg-warm/10 p-4 text-sm text-warm">
-          No database is configured (DATABASE_URL is unset). Showing empty state.
+          {t("wk.noDb")}
         </div>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-4">
-        <StatCard label="Synced routines" value={data.total} />
-        <StatCard label="With a schedule" value={data.scheduled} />
+        <StatCard label={t("wk.rt.statSynced")} value={data.total} />
+        <StatCard label={t("wk.rt.statScheduled")} value={data.scheduled} />
       </div>
 
       {data.rows.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-8 text-center">
           <p className="text-sm font-medium text-text-secondary">
-            No routines synced yet.
+            {t("wk.rt.empty")}
           </p>
           <p className="mt-1 text-xs text-text-muted">
-            Routine → Garmin planned-workout sync runs from the pipeline; synced
-            routines will appear here.
+            {t("wk.rt.emptyHint")}
           </p>
         </div>
       ) : (
@@ -174,24 +174,24 @@ export default async function RoutinesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-medium">Routine</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Garmin workout</th>
-                <th className="px-4 py-2 font-medium">Scheduled</th>
-                <th className="px-4 py-2 font-medium">Synced</th>
+                <th className="px-4 py-2 font-medium">{t("wk.rt.colRoutine")}</th>
+                <th className="px-4 py-2 font-medium">{t("wk.rt.colStatus")}</th>
+                <th className="px-4 py-2 font-medium">{t("wk.rt.colGarminWorkout")}</th>
+                <th className="px-4 py-2 font-medium">{t("wk.rt.colScheduled")}</th>
+                <th className="px-4 py-2 font-medium">{t("wk.rt.colSynced")}</th>
                 {/* Labelled for screen readers without an sr-only span: that is absolutely
                     positioned, escapes the table's scroll box and widened the whole page. */}
-                <th className="px-4 py-2 font-medium" aria-label="Remove" />
+                <th className="px-4 py-2 font-medium" aria-label={t("wk.rt.remove")} />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {data.rows.map((r) => (
                 <tr key={r.hevy_routine_id}>
                   <td className="px-4 py-2 font-medium text-text">
-                    {r.title || "Untitled routine"}
+                    {r.title || t("wk.rt.untitled")}
                   </td>
                   <td className="px-4 py-2">
-                    <StatusPill status={r.status} />
+                    <StatusPill status={r.status} t={t} />
                   </td>
                   <td className="px-4 py-2 tabular-nums text-text-secondary">
                     {r.garmin_workout_id || "—"}
@@ -200,10 +200,10 @@ export default async function RoutinesPage() {
                     <RoutineSchedules hevyRoutineId={r.hevy_routine_id} entries={r.schedules} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 tabular-nums text-text-muted">
-                    {fmtDate(r.synced_at)}
+                    {fmtDate(locale, r.synced_at)}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <RoutineRemove hevyRoutineId={r.hevy_routine_id} title={r.title || "this routine"} />
+                    <RoutineRemove hevyRoutineId={r.hevy_routine_id} title={r.title || t("wk.rt.thisRoutine")} />
                   </td>
                 </tr>
               ))}

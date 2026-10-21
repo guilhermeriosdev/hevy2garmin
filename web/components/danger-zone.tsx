@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 /**
  * Destructive maintenance actions for the settings page.
@@ -12,6 +13,7 @@ import { withBasePath } from "@/lib/base-path";
  * is guarded behind an inline confirmation because it affects all records.
  */
 export function DangerZone({ syncedCount }: { syncedCount: number }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,7 @@ export function DangerZone({ syncedCount }: { syncedCount: number }) {
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; count?: number; error?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setDone(d.count ?? 0);
@@ -46,10 +48,9 @@ export function DangerZone({ syncedCount }: { syncedCount: number }) {
     <div className="rounded-xl border border-danger/40 bg-danger/5 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-danger">Unsync all workouts</h3>
+          <h3 className="text-sm font-semibold text-danger">{t("danger.title")}</h3>
           <p className="mt-0.5 text-xs text-text-muted">
-            Clears the synced ledger ({syncedCount} record{syncedCount === 1 ? "" : "s"}) so
-            every workout can be synced again. Garmin activities are not deleted.
+            {t(syncedCount === 1 ? "danger.desc.one" : "danger.desc.other", { n: syncedCount })}
           </p>
         </div>
         {!confirming ? (
@@ -57,10 +58,10 @@ export function DangerZone({ syncedCount }: { syncedCount: number }) {
             type="button"
             onClick={() => setConfirming(true)}
             disabled={busy || syncedCount === 0}
-            title={syncedCount === 0 ? "Nothing is synced yet" : undefined}
+            title={syncedCount === 0 ? t("danger.nothingSynced") : undefined}
             className="rounded-lg border border-danger/50 px-3 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/15 disabled:opacity-50"
           >
-            Unsync all
+            {t("danger.unsyncAll")}
           </button>
         ) : (
           <span className="flex items-center gap-2">
@@ -70,7 +71,7 @@ export function DangerZone({ syncedCount }: { syncedCount: number }) {
               disabled={busy}
               className="rounded-lg bg-danger/20 px-3 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/30 disabled:opacity-50"
             >
-              {busy ? "Clearing…" : `Yes, unsync all ${syncedCount}`}
+              {busy ? t("danger.clearing") : t("danger.confirm", { n: syncedCount })}
             </button>
             <button
               type="button"
@@ -78,13 +79,13 @@ export function DangerZone({ syncedCount }: { syncedCount: number }) {
               disabled={busy}
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </span>
         )}
       </div>
       {done != null && (
-        <p className="mt-2 text-xs text-success">Unsynced {done} workout{done === 1 ? "" : "s"}.</p>
+        <p className="mt-2 text-xs text-success">{t(done === 1 ? "danger.done.one" : "danger.done.other", { n: done })}</p>
       )}
       {error && (
         <p className="mt-2 text-xs text-danger" role="alert">

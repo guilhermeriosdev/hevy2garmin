@@ -5,6 +5,10 @@ import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 import { canResync, resyncOutcome, type ResyncOutcome } from "@/lib/resync-row";
 import { resyncedLabel } from "@/lib/resynced";
+import { useI18n } from "@/components/i18n-provider";
+import { fmtDateTime } from "@/lib/i18n/format";
+import type { TFunction } from "@/lib/i18n/translate";
+import type { Locale } from "@/lib/i18n/config";
 
 export interface WorkoutItem {
   hevy_id: string;
@@ -18,19 +22,32 @@ export interface WorkoutItem {
   state: string;
 }
 
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function fmtDate(locale: Locale, value: string | null): string {
+  return fmtDateTime(locale, value, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** The resync text comes from lib/resync-row in English; show it in the user's language. */
+function resyncText(t: TFunction, outcome: ResyncOutcome): string {
+  switch (outcome.text) {
+    case "Resync failed.":
+      return t("wk.row.resyncFailed");
+    case "Resynced from Hevy.":
+      return t("wk.row.resynced");
+    case "This activity is no longer on Garmin, so nothing was changed.":
+      return t("wk.row.targetMissing");
+  }
+  const m = /^Resync did not complete \((.*)\)\.$/.exec(outcome.text);
+  if (m) return t("wk.row.resyncIncomplete", { status: m[1] === "no status" ? t("wk.row.noStatus") : m[1] });
+  return outcome.text;
 }
 
 function StatusPill({ item }: { item: WorkoutItem }) {
+  const { t } = useI18n();
   const terminal: Record<string, { cls: string; label: string }> = {
-    success: { cls: "bg-success/15 text-success", label: "Uploaded" },
-    manual: { cls: "bg-warm/15 text-warm", label: "Marked as synced" },
-    skipped: { cls: "bg-surface-active text-text-muted", label: "Skipped" },
-    failed: { cls: "bg-danger/15 text-danger", label: "Failed" },
+    success: { cls: "bg-success/15 text-success", label: t("wk.statusUploaded") },
+    manual: { cls: "bg-warm/15 text-warm", label: t("wk.statusManual") },
+    skipped: { cls: "bg-surface-active text-text-muted", label: t("wk.statusSkipped") },
+    failed: { cls: "bg-danger/15 text-danger", label: t("wk.statusFailed") },
   };
   if (item.kind === "terminal") {
     const s = terminal[item.state] ?? { cls: "bg-surface-active text-text-secondary", label: item.state };
@@ -40,6 +57,7 @@ function StatusPill({ item }: { item: WorkoutItem }) {
 }
 
 function HrChart({ samples }: { samples: number[] }) {
+  const { t } = useI18n();
   const min = Math.min(...samples);
   const max = Math.max(...samples);
   const range = max - min || 1;
@@ -61,9 +79,9 @@ function HrChart({ samples }: { samples: number[] }) {
         <polyline points={line} fill="none" stroke="#ef4444" strokeWidth={1.6} vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="mt-1 flex justify-between text-xs text-text-muted tabular-nums">
-        <span>min {min} bpm</span>
-        <span>avg {avg} bpm</span>
-        <span>max {max} bpm</span>
+        <span>{t("wk.row.hrMin", { n: min })}</span>
+        <span>{t("wk.row.hrAvg", { n: avg })}</span>
+        <span>{t("wk.row.hrMax", { n: max })}</span>
       </div>
     </div>
   );
@@ -101,6 +119,7 @@ export function WorkoutRow({
   edited?: boolean;
   onResyncOutcome?: (hevyId: string, outcome: ResyncOutcome) => void;
 }) {
+  const { t, locale } = useI18n();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [samples, setSamples] = useState<number[] | null | undefined>(undefined); // undefined = not fetched
@@ -116,7 +135,9 @@ export function WorkoutRow({
   const canHr = Boolean(item.garmin_activity_id);
   const canResolve = item.kind === "pending";
   const canUnsync = item.kind === "terminal";
-  const resynced = resyncedLabel(item.resynced_at, fmtDate);
+  const resynced = resyncedLabel(item.resynced_at, (v) => fmtDate(locale, v))
+    ? t("wk.resynced", { date: fmtDate(locale, new Date(item.resynced_at as string).toISOString()) })
+    : null;
 
   async function toggle() {
     const next = !open;
@@ -146,7 +167,7 @@ export function WorkoutRow({
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setActionErr(d.error ?? `Request failed (${res.status}).`);
+        setActionErr(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       // The server component re-queries; this row moves to terminal and the
@@ -169,7 +190,7 @@ export function WorkoutRow({
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setActionErr(d.error ?? `Request failed (${res.status}).`);
+        setActionErr(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       // The pending row is dropped; the workout becomes a candidate again and
@@ -193,14 +214,14 @@ export function WorkoutRow({
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; status?: string; error?: string };
       if (!res.ok || !d.ok) {
-        setActionErr(d.error ?? `Request failed (${res.status}).`);
+        setActionErr(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       if (d.status === "reconciled_synced") {
         setResolving(false);
         router.refresh(); // Garmin already had it — this row is now terminal.
       } else {
-        setRecoveryMsg("Not on Garmin yet — still pending.");
+        setRecoveryMsg(t("wk.row.pendingNotYet"));
       }
     } catch (err) {
       setActionErr(err instanceof Error ? err.message : String(err));
@@ -221,7 +242,7 @@ export function WorkoutRow({
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; status?: string; error?: string };
       if (!res.ok || !d.ok) {
-        setActionErr(d.error ?? `Request failed (${res.status}).`);
+        setActionErr(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setRetryConfirm(false);
@@ -243,7 +264,7 @@ export function WorkoutRow({
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) {
-        setActionErr(d.error ?? `Request failed (${res.status}).`);
+        setActionErr(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       // The terminal row is gone; the server re-query drops it from the list and
@@ -291,9 +312,9 @@ export function WorkoutRow({
     <li className={`px-4 py-3 ${item.kind === "terminal" ? "opacity-70" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-text">{item.title || "Untitled workout"}</div>
+          <div className="truncate text-sm font-medium text-text">{item.title || t("wk.untitledWorkout")}</div>
           <div className="mt-0.5 text-xs text-text-muted">
-            {fmtDate(item.when)}
+            {fmtDate(locale, item.when)}
             {resynced && (
               <span className="hidden sm:inline">
                 {" · "}
@@ -337,20 +358,20 @@ export function WorkoutRow({
         <div className="flex flex-wrap items-center justify-end gap-2">
           {canResolve && (
             <button type="button" onClick={() => setResolving((v) => !v)} className={actionBtn}>
-              {resolving ? "Cancel" : "Resolve"}
+              {resolving ? t("common.cancel") : t("wk.row.resolve")}
             </button>
           )}
           {canHr && (
             <button type="button" onClick={toggle} className={actionBtn}>
-              {open ? "Hide HR" : "HR"}
+              {open ? t("wk.row.hideHr") : t("wk.row.hr")}
             </button>
           )}
           {edited && (
             <span
               className="inline-block whitespace-nowrap rounded-full bg-warm/15 px-2.5 py-0.5 text-xs font-medium text-warm"
-              title="Changed in Hevy after it synced. Resync to update Garmin."
+              title={t("wk.row.editedTitle")}
             >
-              Edited in Hevy
+              {t("wk.row.edited")}
             </span>
           )}
           {canResync(item) && (
@@ -362,12 +383,12 @@ export function WorkoutRow({
               }}
               className={actionBtn}
             >
-              {resyncConfirm ? "Cancel" : "Resync"}
+              {resyncConfirm ? t("common.cancel") : t("wk.row.resync")}
             </button>
           )}
           {canUnsync && (
             <button type="button" onClick={() => setUnsyncing((v) => !v)} className={actionBtn}>
-              {unsyncing ? "Cancel" : "Unsync"}
+              {unsyncing ? t("common.cancel") : t("wk.row.unsync")}
             </button>
           )}
           <StatusPill item={item} />
@@ -376,13 +397,9 @@ export function WorkoutRow({
 
       {resyncConfirm && (
         <div className="mt-2 rounded-lg border border-border bg-surface p-3">
-          <p className="text-xs font-medium text-text">Resync from Hevy?</p>
+          <p className="text-xs font-medium text-text">{t("wk.row.resyncQ")}</p>
           <p className="mt-1 text-xs text-text-muted">
-            This replaces the exercises, sets, name and description of this
-            Garmin activity with the current Hevy version. Any changes made to
-            them in Garmin Connect will be lost. Heart rate and other watch data
-            are kept. For activities hevy2garmin uploaded, duration and calories
-            keep their original values.
+            {t("wk.row.resyncBody")}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
@@ -391,7 +408,7 @@ export function WorkoutRow({
               disabled={acting}
               className="rounded-lg bg-teal/20 px-3 py-1.5 text-xs font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
             >
-              {acting ? "Resyncing…" : "Resync"}
+              {acting ? t("wk.row.resyncing") : t("wk.row.resync")}
             </button>
           </div>
         </div>
@@ -402,15 +419,14 @@ export function WorkoutRow({
           className={`mt-2 text-xs ${resyncResultCls[resyncResult.kind]}`}
           role={resyncResult.kind === "success" ? "status" : "alert"}
         >
-          {resyncResult.text}
+          {resyncText(t, resyncResult)}
         </p>
       )}
 
       {unsyncing && (
         <div className="mt-2 rounded-lg border border-border bg-surface p-3">
           <p className="text-xs text-text-muted">
-            Remove this from the synced ledger so it can be synced again? The
-            Garmin activity itself is not deleted.
+            {t("wk.row.unsyncBody")}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
@@ -419,7 +435,7 @@ export function WorkoutRow({
               disabled={acting}
               className="rounded-lg bg-danger/15 px-3 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/25 disabled:opacity-50"
             >
-              {acting ? "Working…" : "Unsync"}
+              {acting ? t("wk.row.working") : t("wk.row.unsync")}
             </button>
             {actionErr && (
               <span className="text-xs text-danger" role="alert">
@@ -433,8 +449,7 @@ export function WorkoutRow({
       {resolving && (
         <div className="mt-2 rounded-lg border border-border bg-surface p-3">
           <p className="text-xs text-text-muted">
-            This workout is still in-flight. Mark it synced, skip it, or abandon
-            the stuck attempt so it can retry — none of these upload to Garmin.
+            {t("wk.row.resolveBody")}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
@@ -443,7 +458,7 @@ export function WorkoutRow({
               disabled={acting}
               className="rounded-lg bg-warm/20 px-3 py-1.5 text-xs font-medium text-warm transition-colors hover:bg-warm/30 disabled:opacity-50"
             >
-              {acting ? "Working…" : "Mark as synced"}
+              {acting ? t("wk.row.working") : t("wk.row.markSynced")}
             </button>
             <button
               type="button"
@@ -451,16 +466,16 @@ export function WorkoutRow({
               disabled={acting}
               className="rounded-lg bg-surface-active px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-border disabled:opacity-50"
             >
-              Skip
+              {t("wk.row.skip")}
             </button>
             <button
               type="button"
               onClick={abandon}
               disabled={acting}
-              title="Drop the stuck attempt so it can be retried later"
+              title={t("wk.row.abandonTitle")}
               className="rounded-lg px-3 py-1.5 text-xs font-medium text-text-muted underline-offset-2 transition-colors hover:text-text-secondary hover:underline disabled:opacity-50"
             >
-              Abandon
+              {t("wk.row.abandon")}
             </button>
             {actionErr && (
               <span className="text-xs text-danger" role="alert">
@@ -470,25 +485,25 @@ export function WorkoutRow({
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-2">
-            <span className="text-xs text-text-muted">Recovery:</span>
+            <span className="text-xs text-text-muted">{t("wk.row.recovery")}</span>
             <button
               type="button"
               onClick={reconcile}
               disabled={acting}
-              title="Check whether Garmin already has this activity"
+              title={t("wk.row.checkGarminTitle")}
               className={actionBtn}
             >
-              {acting ? "Working…" : "Check Garmin"}
+              {acting ? t("wk.row.working") : t("wk.row.checkGarmin")}
             </button>
             {!retryConfirm ? (
               <button
                 type="button"
                 onClick={() => setRetryConfirm(true)}
                 disabled={acting}
-                title="Re-upload this workout to Garmin"
+                title={t("wk.row.retryUploadTitle")}
                 className={actionBtn}
               >
-                Retry upload
+                {t("wk.row.retryUpload")}
               </button>
             ) : (
               <span className="flex items-center gap-2">
@@ -498,7 +513,7 @@ export function WorkoutRow({
                   disabled={acting}
                   className="rounded-lg bg-teal/20 px-3 py-1.5 text-xs font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
                 >
-                  {acting ? "Retrying…" : "Confirm re-upload"}
+                  {acting ? t("wk.row.retrying") : t("wk.row.confirmReupload")}
                 </button>
                 <button
                   type="button"
@@ -506,7 +521,7 @@ export function WorkoutRow({
                   disabled={acting}
                   className={actionBtn}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </span>
             )}
@@ -520,11 +535,11 @@ export function WorkoutRow({
       {open && (
         <div>
           {loading ? (
-            <p className="mt-2 text-xs text-text-muted">Loading heart-rate…</p>
+            <p className="mt-2 text-xs text-text-muted">{t("wk.row.loadingHr")}</p>
           ) : samples ? (
             <HrChart samples={samples} />
           ) : (
-            <p className="mt-2 text-xs text-text-muted">No cached heart-rate for this workout yet.</p>
+            <p className="mt-2 text-xs text-text-muted">{t("wk.row.noHr")}</p>
           )}
         </div>
       )}

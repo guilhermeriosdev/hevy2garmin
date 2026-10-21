@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { useI18n } from "@/components/i18n-provider";
 
 interface Routine {
   id: string;
@@ -14,6 +15,7 @@ const btn =
   "rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-active disabled:opacity-50";
 
 function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [busy, setBusy] = useState<null | "sync" | "schedule">(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -41,11 +43,11 @@ function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
       const res = await fetch(withBasePath(`/api/routines/${encodeURIComponent(r.id)}/sync`), { method: "POST" });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setSynced(true);
-      setMsg(d.status === "skipped" ? "Already on Garmin, nothing changed." : "Synced to Garmin as a planned workout.");
+      setMsg(d.status === "skipped" ? t("wk.hrl.skipped") : t("wk.hrl.synced"));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -56,7 +58,7 @@ function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
 
   async function schedule() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setError(recurring ? "Pick a start date first." : "Pick a date first.");
+      setError(recurring ? t("wk.hrl.pickStart") : t("wk.hrl.pickDate"));
       return;
     }
     setBusy("schedule");
@@ -73,11 +75,11 @@ function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; scheduled?: number; total?: number };
       if (!res.ok || !d.ok) {
-        setError(d.error ?? `Request failed (${res.status}).`);
+        setError(d.error ?? t("common.requestFailed", { status: res.status }));
         return;
       }
       setShowSchedule(false);
-      setMsg(recurring ? `Scheduled ${d.scheduled ?? d.total} weekly sessions.` : `Scheduled for ${date}.`);
+      setMsg(recurring ? t("wk.hrl.scheduledWeekly", { n: d.scheduled ?? d.total ?? "" }) : t("wk.hrl.scheduledFor", { date }));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -92,13 +94,13 @@ function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-text">{r.title}</div>
           <div className="mt-0.5 text-xs text-text-muted">
-            {r.exercises} exercise{r.exercises === 1 ? "" : "s"}
-            {synced && <span className="text-success"> · on Garmin</span>}
+            {t(r.exercises === 1 ? "wk.hrl.exercise.one" : "wk.hrl.exercise.other", { n: r.exercises })}
+            {synced && <span className="text-success"> · {t("wk.hrl.onGarmin")}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={sync} disabled={busy !== null} className={btn}>
-            {busy === "sync" ? "Syncing…" : synced ? "Re-sync" : "Sync to Garmin"}
+            {busy === "sync" ? t("wk.hrl.syncing") : synced ? t("wk.hrl.resync") : t("wk.hrl.syncToGarmin")}
           </button>
           <button
             type="button"
@@ -106,14 +108,14 @@ function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
             disabled={busy !== null}
             className={btn}
           >
-            {showSchedule ? "Cancel" : "Schedule"}
+            {showSchedule ? t("common.cancel") : t("wk.hrl.schedule")}
           </button>
         </div>
       </div>
       {showSchedule && (
         <div className="mt-2 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-xs text-text-muted">{recurring ? "Start date" : "Date"}</label>
+            <label className="text-xs text-text-muted">{recurring ? t("wk.hrl.startDate") : t("wk.hrl.date")}</label>
             <input
               type="date"
               value={date}
@@ -122,33 +124,33 @@ function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
             />
             <label className="flex items-center gap-1.5 text-xs text-text-secondary">
               <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} className="h-3.5 w-3.5 accent-teal" />
-              Repeat weekly
+              {t("wk.hrl.repeatWeekly")}
             </label>
           </div>
           {recurring && (
             <div className="flex flex-wrap items-center gap-2">
-              <label className="text-xs text-text-muted">on</label>
+              <label className="text-xs text-text-muted">{t("wk.hrl.on")}</label>
               <select
                 value={weekday}
                 onChange={(e) => setWeekday(Number.parseInt(e.target.value, 10))}
-                aria-label="Weekday"
+                aria-label={t("wk.hrl.weekday")}
                 className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-text focus:border-teal focus:outline-none"
               >
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
-                  <option key={d} value={i}>{d}</option>
+                {(["wk.hrl.wd0", "wk.hrl.wd1", "wk.hrl.wd2", "wk.hrl.wd3", "wk.hrl.wd4", "wk.hrl.wd5", "wk.hrl.wd6"] as const).map((d, i) => (
+                  <option key={d} value={i}>{t(d)}</option>
                 ))}
               </select>
-              <label className="text-xs text-text-muted">for</label>
+              <label className="text-xs text-text-muted">{t("wk.hrl.for")}</label>
               <input
                 type="number"
                 min={1}
                 max={52}
                 value={weeks}
                 onChange={(e) => setWeeks(e.target.value)}
-                aria-label="Weeks"
+                aria-label={t("wk.hrl.weeksAria")}
                 className="w-16 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-text focus:border-teal focus:outline-none"
               />
-              <span className="text-xs text-text-muted">weeks</span>
+              <span className="text-xs text-text-muted">{t("wk.hrl.weeks")}</span>
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
@@ -158,9 +160,9 @@ function RoutineRow({ r, onGarmin }: { r: Routine; onGarmin: boolean }) {
               disabled={busy !== null}
               className="rounded-lg bg-teal/20 px-3 py-1.5 text-xs font-medium text-teal transition-colors hover:bg-teal/30 disabled:opacity-50"
             >
-              {busy === "schedule" ? "Scheduling…" : recurring ? "Add weekly" : "Add to calendar"}
+              {busy === "schedule" ? t("wk.hrl.scheduling") : recurring ? t("wk.hrl.addWeekly") : t("wk.hrl.addToCalendar")}
             </button>
-            <span className="text-xs text-text-muted">Sync the routine first if you haven&apos;t.</span>
+            <span className="text-xs text-text-muted">{t("wk.hrl.syncFirst")}</span>
           </div>
         </div>
       )}
@@ -189,6 +191,7 @@ interface BulkState {
 
 /** `syncedIds`: Hevy ids of the routines the synced table has on Garmin. */
 export function HevyRoutinesList({ syncedIds = [] }: { syncedIds?: string[] }) {
+  const { t } = useI18n();
   const onGarmin = new Set(syncedIds);
   const router = useRouter();
   const [phase, setPhase] = useState<"loading" | "ready">("loading");
@@ -257,15 +260,15 @@ export function HevyRoutinesList({ syncedIds = [] }: { syncedIds?: string[] }) {
   return (
     <section className="mb-8">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-text">Your Hevy routines</h2>
+        <h2 className="text-lg font-semibold text-text">{t("wk.hrl.title")}</h2>
         <div className="flex flex-wrap items-center gap-2">
           {routines.length > 0 && (
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search routines…"
-              aria-label="Search routines"
+              placeholder={t("wk.hrl.searchPlaceholder")}
+              aria-label={t("wk.hrl.searchAria")}
               className="w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text focus:border-teal focus:outline-none"
             />
           )}
@@ -276,7 +279,7 @@ export function HevyRoutinesList({ syncedIds = [] }: { syncedIds?: string[] }) {
                 onClick={() => { stopRef.current = true; }}
                 className="rounded-lg border border-warm/50 px-3 py-2 text-xs font-medium text-warm hover:bg-warm/15"
               >
-                Stop
+                {t("wk.hrl.stop")}
               </button>
             ) : !confirmAll ? (
               <button
@@ -284,16 +287,16 @@ export function HevyRoutinesList({ syncedIds = [] }: { syncedIds?: string[] }) {
                 onClick={() => setConfirmAll(true)}
                 className="rounded-lg bg-teal/20 px-3 py-2 text-xs font-medium text-teal hover:bg-teal/30"
               >
-                Sync all
+                {t("wk.hrl.syncAll")}
               </button>
             ) : (
               <span className="flex items-center gap-2">
-                <span className="text-xs text-text-muted">Sync {filtered.length} to Garmin?</span>
+                <span className="text-xs text-text-muted">{t("wk.hrl.syncNQ", { n: filtered.length })}</span>
                 <button type="button" onClick={syncAll} className="rounded-lg bg-teal px-3 py-2 text-xs font-medium text-black">
-                  Start
+                  {t("wk.hrl.start")}
                 </button>
                 <button type="button" onClick={() => setConfirmAll(false)} className="text-xs text-text-muted underline">
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </span>
             ))}
@@ -306,29 +309,29 @@ export function HevyRoutinesList({ syncedIds = [] }: { syncedIds?: string[] }) {
             <div className="h-full rounded-full bg-teal transition-all" style={{ width: `${bulkPct}%` }} role="progressbar" aria-valuenow={bulkPct} aria-valuemin={0} aria-valuemax={100} />
           </div>
           <p className="mt-1.5 text-xs text-text-secondary tabular-nums">
-            {bulk.done ? "Done — " : "Syncing — "}
-            <span className="text-success">{bulk.synced} synced</span>
-            {bulk.failed > 0 && <span className="text-danger"> · {bulk.failed} failed</span>}
-            {" of "}
+            {bulk.done ? t("wk.hrl.done") : t("wk.hrl.syncingDash")}
+            <span className="text-success">{t("wk.hrl.nSynced", { n: bulk.synced })}</span>
+            {bulk.failed > 0 && <span className="text-danger"> · {t("wk.hrl.nFailed", { n: bulk.failed })}</span>}
+            {t("wk.hrl.of")}
             {bulk.total}
           </p>
         </div>
       )}
       {phase === "loading" ? (
         <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
-          Loading routines from Hevy…
+          {t("wk.hrl.loading")}
         </div>
       ) : routines.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
           {demo
-            ? "The demo is not connected to a Hevy account, so there is nothing live to list here. The routines synced to Garmin are below."
+            ? t("wk.hrl.demo")
             : note
-              ? `Couldn't load routines: ${note}`
-              : "No routines found in Hevy."}
+              ? t("wk.hrl.loadFailed", { note })
+              : t("wk.hrl.none")}
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-6 text-center text-sm text-text-muted">
-          No routines match “{query}”.
+          {t("wk.hrl.noMatch", { query })}
         </div>
       ) : (
         <>
@@ -338,7 +341,7 @@ export function HevyRoutinesList({ syncedIds = [] }: { syncedIds?: string[] }) {
             ))}
           </ul>
           <p className="mt-2 text-xs text-text-muted tabular-nums">
-            {filtered.length} of {routines.length} routine{routines.length === 1 ? "" : "s"}
+            {t(routines.length === 1 ? "wk.hrl.countOf.one" : "wk.hrl.countOf.other", { shown: filtered.length, total: routines.length })}
           </p>
         </>
       )}

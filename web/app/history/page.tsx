@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { resyncedLabel } from "@/lib/resynced";
+import { getT } from "@/lib/i18n/server";
+import { fmtDateTime } from "@/lib/i18n/format";
+import type { Locale } from "@/lib/i18n/config";
+import type { TFunction } from "@/lib/i18n/translate";
 
 // Queries the live hevy2garmin Postgres per request — never at build time.
 export const dynamic = "force-dynamic";
@@ -63,11 +67,8 @@ async function loadHistory(): Promise<HistoryData> {
   };
 }
 
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
+function fmtDate(locale: Locale, value: string | null): string {
+  return fmtDateTime(locale, value, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -77,18 +78,18 @@ function fmtDate(value: string | null): string {
 }
 
 /** When a resync last rewrote the row, on its own line under the sync date. */
-function ResyncedNote({ at }: { at: string | null }) {
-  const label = resyncedLabel(at, fmtDate);
-  return label ? <div className="text-xs">{label}</div> : null;
+function ResyncedNote({ at, t, locale }: { at: string | null; t: TFunction; locale: Locale }) {
+  if (!resyncedLabel(at, (v) => fmtDate(locale, v))) return null;
+  return <div className="text-xs">{t("wk.resynced", { date: fmtDate(locale, new Date(at as string).toISOString()) })}</div>;
 }
 
-function statusLabel(status: string): string {
-  if (status === "manual") return "Marked as synced";
-  if (status === "skipped") return "Skipped";
-  return "Uploaded";
+function statusLabel(t: TFunction, status: string): string {
+  if (status === "manual") return t("wk.statusManual");
+  if (status === "skipped") return t("wk.statusSkipped");
+  return t("wk.statusUploaded");
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, t }: { status: string; t: TFunction }) {
   const styles: Record<string, string> = {
     success: "bg-success/15 text-success",
     manual: "bg-warm/15 text-warm",
@@ -111,27 +112,28 @@ function StatusPill({ status }: { status: string }) {
       >
         <polyline points="20 6 9 17 4 12" />
       </svg>
-      {statusLabel(status)}
+      {statusLabel(t, status)}
     </span>
   );
 }
 
 export default async function HistoryPage() {
+  const { t, locale } = await getT();
   const data = await loadHistory();
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 md:px-6">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Sync history</h1>
+        <h1 className="text-2xl font-bold text-text">{t("wk.hist.title")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          {data.total} {data.total === 1 ? "workout" : "workouts"} resolved
-          {data.total > LIMIT && <span> · showing the {LIMIT} most recent</span>}
+          {t(data.total === 1 ? "wk.hist.count.one" : "wk.hist.count.other", { n: data.total })}
+          {data.total > LIMIT && <span> · {t("wk.hist.showing", { limit: LIMIT })}</span>}
         </p>
       </header>
 
       {!data.dbConfigured && (
         <div className="mb-6 rounded-lg border border-warm/40 bg-warm/10 p-4 text-sm text-warm">
-          No database is configured (DATABASE_URL is unset). Showing empty state.
+          {t("wk.noDb")}
         </div>
       )}
 
@@ -153,14 +155,21 @@ export default async function HistoryPage() {
             <polyline points="12 7 12 12 15 14" />
           </svg>
           <p className="text-sm font-medium text-text-secondary">
-            No workouts synced yet.
+            {t("wk.hist.empty")}
           </p>
           <p className="mt-1 text-xs text-text-muted">
-            Go to{" "}
-            <Link href="/workouts" className="text-teal underline">
-              Workouts
-            </Link>{" "}
-            and click Sync.
+            {t("wk.hist.goTo", { link: "\u0000" })
+              .split("\u0000")
+              .flatMap((part, i) =>
+                i === 0
+                  ? [part]
+                  : [
+                      <Link key="l" href="/workouts" className="text-teal underline">
+                        {t("nav.workouts")}
+                      </Link>,
+                      part,
+                    ],
+              )}
           </p>
         </div>
       ) : (
@@ -168,23 +177,23 @@ export default async function HistoryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-medium">Synced</th>
-                <th className="px-4 py-2 font-medium">Title</th>
-                <th className="px-4 py-2 text-right font-medium">Calories</th>
-                <th className="px-4 py-2 text-right font-medium">Avg HR</th>
-                <th className="px-4 py-2 font-medium">Garmin ID</th>
-                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">{t("wk.hist.colSynced")}</th>
+                <th className="px-4 py-2 font-medium">{t("wk.hist.colTitle")}</th>
+                <th className="px-4 py-2 text-right font-medium">{t("wk.hist.colCalories")}</th>
+                <th className="px-4 py-2 text-right font-medium">{t("wk.hist.colAvgHr")}</th>
+                <th className="px-4 py-2 font-medium">{t("wk.hist.colGarminId")}</th>
+                <th className="px-4 py-2 font-medium">{t("wk.hist.colStatus")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {data.rows.map((r) => (
                 <tr key={r.hevy_id}>
                   <td className="whitespace-nowrap px-4 py-2 tabular-nums text-text-muted">
-                    {fmtDate(r.synced_at)}
-                    <ResyncedNote at={r.resynced_at} />
+                    {fmtDate(locale, r.synced_at)}
+                    <ResyncedNote at={r.resynced_at} t={t} locale={locale} />
                   </td>
                   <td className="px-4 py-2 font-medium text-text">
-                    {r.title || "Untitled workout"}
+                    {r.title || t("wk.untitledWorkout")}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums text-text-secondary">
                     {r.calories ?? "—"}
@@ -196,7 +205,7 @@ export default async function HistoryPage() {
                     {r.garmin_activity_id ?? "—"}
                   </td>
                   <td className="px-4 py-2">
-                    <StatusPill status={r.status} />
+                    <StatusPill status={r.status} t={t} />
                   </td>
                 </tr>
               ))}

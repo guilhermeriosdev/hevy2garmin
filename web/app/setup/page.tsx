@@ -5,6 +5,9 @@ import { ConnectHevy } from "@/components/connect-hevy";
 import { ConnectGarmin } from "@/components/connect-garmin";
 import { directGarminLogin } from "@/lib/direct-login-flag";
 import { SetupTimezone } from "@/components/setup-timezone";
+import { fmtDateTime } from "@/lib/i18n/format";
+import { getT } from "@/lib/i18n/server";
+import type { Locale } from "@/lib/i18n/config";
 
 // Queries the live hevy2garmin Postgres per request — never at build time.
 export const dynamic = "force-dynamic";
@@ -42,11 +45,11 @@ async function loadSetup(): Promise<SetupData> {
   return { dbConfigured: true, hevy, garmin, timezone: tz };
 }
 
-function fmtDate(value: string | null): string {
+function fmtDate(locale: Locale, value: string | null): string {
   if (!value) return "";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return fmtDateTime(locale, value, { year: "numeric", month: "short", day: "numeric" });
 }
 
 /**
@@ -56,11 +59,11 @@ function fmtDate(value: string | null): string {
  */
 function StatusDot({
   connected,
-  labels = ["Connected", "Not connected"],
+  labels,
   tone = "bg-danger",
 }: {
   connected: boolean;
-  labels?: [string, string];
+  labels: [string, string];
   /** A missing timezone is not a failure, so it should not be red like one. */
   tone?: string;
 }) {
@@ -79,13 +82,14 @@ function StatusDot({
 
 /* A production deploy with no password: the proxy serves only this page and the login page
    (#550), so the connect forms would only fail. Say what to do instead. */
-function SetPasswordFirst() {
+async function SetPasswordFirst() {
+  const { t } = await getT();
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 md:px-6">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Set a password first</h1>
+        <h1 className="text-2xl font-bold text-text">{t("setup.pw.title")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          This deployment has no dashboard password, so it serves nothing but this page.
+          {t("setup.pw.intro")}
         </p>
       </header>
       <section
@@ -94,21 +98,17 @@ function SetPasswordFirst() {
       >
         <ol className="list-decimal space-y-2 pl-5">
           <li>
-            In Vercel open your project, then <strong>Settings</strong> then{" "}
+            {t("setup.pw.s1a")} <strong>Settings</strong> {t("setup.pw.s1b")}{" "}
             <strong>Environment Variables</strong>.
           </li>
           <li>
-            Add <code className="rounded bg-surface px-1">H2G_PASSWORD</code> with a password of your
-            choice. Optionally add{" "}
-            <code className="rounded bg-surface px-1">HEVY2GARMIN_SECRET</code> (32 random characters)
-            to sign the session cookie.
+            {t("setup.pw.s2a")} <code className="rounded bg-surface px-1">H2G_PASSWORD</code> {t("setup.pw.s2b")}{" "}
+            <code className="rounded bg-surface px-1">HEVY2GARMIN_SECRET</code> {t("setup.pw.s2c")}
           </li>
-          <li>Redeploy, come back here and sign in. Setup continues after that.</li>
+          <li>{t("setup.pw.s3")}</li>
         </ol>
         <p className="mt-4 text-xs text-text-muted">
-          Self-hosting with Docker or <code className="rounded bg-surface px-1">next start</code>: put
-          the same variables in the environment. The README section &quot;Securing the dashboard&quot;
-          has the details.
+          {t("setup.pw.selfA")} <code className="rounded bg-surface px-1">next start</code>{t("setup.pw.selfB")}
         </p>
       </section>
     </main>
@@ -118,21 +118,23 @@ function SetPasswordFirst() {
 export default async function SetupPage() {
   if (productionRuntime() && !authEnabled()) return <SetPasswordFirst />;
   const data = await loadSetup();
+  const { t, locale } = await getT();
+  const connLabels: [string, string] = [t("setup.connected"), t("setup.notConnected")];
   const hevyConnected = data.hevy.connected;
   const garminConnected = data.garmin.connected;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 md:px-6">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Setup</h1>
+        <h1 className="text-2xl font-bold text-text">{t("setup.title")}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Connect Hevy and Garmin so your workouts can sync.
+          {t("setup.intro")}
         </p>
       </header>
 
       {!data.dbConfigured && (
         <div className="mb-6 rounded-lg border border-warm/40 bg-warm/10 p-4 text-sm text-warm">
-          No database is configured (DATABASE_URL is unset).
+          {t("setup.noDb")}
         </div>
       )}
 
@@ -140,11 +142,11 @@ export default async function SetupPage() {
       <section className="mb-6 rounded-xl border border-border bg-surface-elevated p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-text">Hevy</h2>
-          <StatusDot connected={hevyConnected} />
+          <StatusDot connected={hevyConnected} labels={connLabels} />
         </div>
         {hevyConnected && data.hevy.connectedAt && (
           <p className="mb-3 text-xs text-text-muted">
-            Connected {fmtDate(data.hevy.connectedAt)}.
+            {t("setup.connectedOn", { date: fmtDate(locale, data.hevy.connectedAt) })}
           </p>
         )}
         <ConnectHevy connected={hevyConnected} />
@@ -154,11 +156,11 @@ export default async function SetupPage() {
       <section className="rounded-xl border border-border bg-surface-elevated p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-text">Garmin Connect</h2>
-          <StatusDot connected={garminConnected} />
+          <StatusDot connected={garminConnected} labels={connLabels} />
         </div>
         {garminConnected && data.garmin.connectedAt && (
           <p className="mb-3 text-xs text-text-muted">
-            Connected {fmtDate(data.garmin.connectedAt)}.
+            {t("setup.connectedOn", { date: fmtDate(locale, data.garmin.connectedAt) })}
           </p>
         )}
         <ConnectGarmin connected={garminConnected} directLogin={directGarminLogin()} />
@@ -169,8 +171,8 @@ export default async function SetupPage() {
           connections that actually gate everything. */}
       <section className="mt-6 rounded-xl border border-border bg-surface-elevated p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-text">Timezone</h2>
-          <StatusDot connected={data.timezone !== null} labels={["Set", "Not set"]} tone="bg-text-muted" />
+          <h2 className="text-lg font-semibold text-text">{t("setup.timezone")}</h2>
+          <StatusDot connected={data.timezone !== null} labels={[t("setup.set"), t("setup.notSet")]} tone="bg-text-muted" />
         </div>
         <SetupTimezone current={data.timezone} />
       </section>
