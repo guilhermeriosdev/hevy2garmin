@@ -21,6 +21,14 @@ import { toUtcDate } from "../match";
 /** `sync.grace_period_minutes` in the Python config. */
 export const DEFAULT_GRACE_MINUTES = 120;
 
+/**
+ * How long an unattended run keeps waiting for heart rate to reach Garmin
+ * before it uploads without it. Twelve hours covers a watch that syncs late in
+ * the day; after that a workout with no HR is uploaded as it is rather than
+ * held forever. 0 turns the wait off.
+ */
+export const DEFAULT_HR_WAIT_MINUTES = 720;
+
 /** What the grace check decided, with the numbers behind it for logging. */
 export interface GraceCheck {
   /** True when the workout is too new to sync yet. */

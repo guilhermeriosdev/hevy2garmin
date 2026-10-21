@@ -22,6 +22,7 @@ export type DedupDecision =
   | "existing_garmin_activity" // layer 2: Garmin already has an activity at this start time — match, do NOT upload
   | "claim_lost" // layer 3: another worker holds the pending claim — deferred
   | "within_grace" // too new: the watch may not have uploaded its own activity yet — deferred
+  | "waiting_for_hr" // no heart rate on Garmin yet for a recent workout — deferred so the upload (and Strava's copy) carries HR
   | "no_candidates" // nothing left to sync
   | "no_start_time" // workout has no start_time; can't run the layer-2 lookup safely
   | "stored_activity" // resync: the activity the ledger stored is the target; nothing is looked up by time
@@ -216,6 +217,14 @@ export interface SyncOneOptions {
   respectGrace?: boolean;
   /** The wait applied when `respectGrace` is set. Default 120; 0 disables it. */
   graceMinutes?: number;
+  /**
+   * With `respectGrace` and `hrFusion` both on, a workout that ended less than
+   * this many minutes ago and has no heart rate on Garmin yet is deferred
+   * instead of uploaded without it. Garmin forwards an upload to Strava at once
+   * and Strava never picks up HR added later, so uploading early costs the
+   * heart rate for good. Default 720; 0 uploads without HR immediately.
+   */
+  hrWaitMinutes?: number;
   /**
    * The user's merge settings, as saved on the Settings page. Omitted means
    * merge is off and the engine uploads a fresh activity, which is what it did

@@ -38,7 +38,7 @@ import { dailyHrToPoints, HRBackupError, hrForSync, type HrPoint } from "../hr";
 import { toUtcDate } from "../match";
 import { filterUnsynced } from "./dedup";
 import { generateDescription } from "./description";
-import { checkGracePeriod, DEFAULT_GRACE_MINUTES } from "./grace";
+import { checkGracePeriod, DEFAULT_GRACE_MINUTES, DEFAULT_HR_WAIT_MINUTES, workoutAgeMinutes } from "./grace";
 import { isWatchRecorded, mergeIntoWatchActivity, pushSetsIntoActivity, type MergeOptions } from "./merge";
 import type { CandidateActivity } from "../merge-match";
 import type { GarminGateway, SyncDeps } from "./gateway";
@@ -182,6 +182,7 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
   const targetHevyId = options.targetHevyId;
   const respectGrace = options.respectGrace ?? false;
   const graceMinutes = options.graceMinutes ?? DEFAULT_GRACE_MINUTES;
+  const hrWaitMinutes = options.hrWaitMinutes ?? DEFAULT_HR_WAIT_MINUTES;
   const merge = options.merge ?? {};
   const mergeOptions = mergeOptionsOf(merge);
   const hrFusion = options.hrFusion ?? true;
@@ -509,6 +510,22 @@ export async function syncOneWorkout(deps: SyncDeps, options: SyncOneOptions = {
       // Python does the same at `sync.py:545-557`.
       if (!found || !found.length) {
         found = await hrForSync(workout, hrDeps(deps, gateway), hrOptions);
+      }
+
+      // Still nothing: for an unattended run, wait. Uploading now would send the
+      // activity to Strava without HR, and Strava keeps the first copy it gets.
+      // Nothing is claimed or written yet, so the workout simply stays a
+      // candidate for the next run. A replace in progress (watchActivityId) is
+      // excluded: that path has its own HR protection.
+      if (hrFusion && respectGrace && watchActivityId == null && !(found && found.length) && hrWaitMinutes > 0) {
+        const age = workoutAgeMinutes(workout);
+        if (age !== null && age < hrWaitMinutes) {
+          return {
+            ...emptyResult(false, "waiting_for_hr", remaining),
+            status: "deferred",
+            workout: workoutView(workout),
+          };
+        }
       }
 
       hrSamples = hrFusion ? found : null;
